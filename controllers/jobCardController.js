@@ -267,3 +267,51 @@ exports.deleteJobCard = async (req, res) => {
     });
   }
 };
+
+
+// GET ORDERS BY CUSTOMER NO
+exports.getOrdersByCustomerNo = async (req, res) => {
+  try {
+    const { customerNo } = req.params;
+
+    // CHECK CUSTOMER EXISTS
+    const customer = await Customer.findOne({
+      customerNo,
+      isDeleted: false,
+    });
+
+    if (!customer) {
+      return res.status(404).json({
+        success: false,
+        message: "Customer not found",
+      });
+    }
+
+    // GET ALL ORDERS
+    const orders = await JobCard.find({
+      customer: customer._id,
+      isDeleted: false,
+    })
+      .populate("customer")
+      .populate("assignedEmployee")
+      .sort({
+        createdAt: -1,
+      });
+
+    res.status(200).json({
+      success: true,
+      customer: {
+        customerNo: customer.customerNo,
+        fullName: customer.fullName,
+        phone: customer.phone,
+      },
+      totalOrders: orders.length,
+      data: orders,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};

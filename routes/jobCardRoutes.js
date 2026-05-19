@@ -7,7 +7,8 @@ const {
   getAllJobCards,
   getJobCardByJobCardNo,
   updateJobCard,
-  deleteJobCard
+  deleteJobCard,
+  getOrdersByCustomerNo,
 } = require("../controllers/jobCardController");
 
 // CREATE JOB CARD
@@ -15,6 +16,13 @@ router.post("/create", auth, createJobCard);
 
 // GET ALL JOB CARDS
 router.get("/all", auth, getAllJobCards);
+
+// GET ORDERS BY CUSTOMER NO
+router.get(
+  "/customer/:customerNo",
+  getOrdersByCustomerNo
+);
+
 
 // GET JOB CARD BY NO
 router.get("/:jobCardNo", auth, getJobCardByJobCardNo);
