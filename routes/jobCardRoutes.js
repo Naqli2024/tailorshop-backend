@@ -9,6 +9,7 @@ const {
   updateJobCard,
   deleteJobCard,
   getOrdersByCustomerNo,
+  getJobCardSummary,
 } = require("../controllers/jobCardController");
 
 // CREATE JOB CARD
@@ -23,9 +24,14 @@ router.get(
   getOrdersByCustomerNo
 );
 
-
 // GET JOB CARD BY NO
 router.get("/:jobCardNo", auth, getJobCardByJobCardNo);
+
+// JOB CARD SUMMARY
+router.get(
+  "/summary/:jobCardNo",
+  getJobCardSummary
+);
 
 // UPDATE JOB CARD
 router.put("/:jobCardNo", auth, updateJobCard);

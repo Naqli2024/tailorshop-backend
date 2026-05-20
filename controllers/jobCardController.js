@@ -1,6 +1,7 @@
 const JobCard = require("../models/JobCard");
 const Customer = require("../models/Customer");
 const Employee = require("../models/Employee");
+const Notification = require("../models/Notification");
 
 // CREATE JOB CARD
 exports.createJobCard = async (req, res) => {
@@ -85,6 +86,23 @@ exports.createJobCard = async (req, res) => {
       items,
       billing,
       notes,
+    });
+
+    // CREATE NOTIFICATION
+    await Notification.create({
+      customer: customerExists._id,
+
+      customerNo: customerExists.customerNo,
+
+      title: "Job Card Created",
+
+      message: `Your tailoring order ${jobCardNo} has been created successfully. Delivery date is ${deliveryDate}.`,
+
+      type: "Job Created",
+
+      relatedJobCardNo: jobCardNo,
+
+      notificationChannel: "System",
     });
 
     // POPULATE RESPONSE
@@ -179,7 +197,7 @@ exports.updateJobCard = async (req, res) => {
     }
 
     const {
-      assignedEmployee,
+      empNo,
       deliveryDate,
       trialDate,
       priority,
@@ -189,10 +207,10 @@ exports.updateJobCard = async (req, res) => {
       notes,
     } = req.body;
 
-    // VALIDATE EMPLOYEE
-    if (assignedEmployee) {
+    // VALIDATE EMPLOYEE USING EMPNO
+    if (empNo) {
       const employeeExists = await Employee.findOne({
-        _id: assignedEmployee,
+        empNo,
         isDeleted: false,
       });
 
@@ -203,29 +221,65 @@ exports.updateJobCard = async (req, res) => {
         });
       }
 
-      jobCard.assignedEmployee = assignedEmployee;
+      jobCard.assignedEmployee = employeeExists._id;
     }
 
-    jobCard.deliveryDate = deliveryDate || jobCard.deliveryDate;
+    jobCard.deliveryDate =
+      deliveryDate || jobCard.deliveryDate;
 
-    jobCard.trialDate = trialDate || jobCard.trialDate;
+    jobCard.trialDate =
+      trialDate || jobCard.trialDate;
 
-    jobCard.priority = priority || jobCard.priority;
+    jobCard.priority =
+      priority || jobCard.priority;
 
-    jobCard.status = status || jobCard.status;
+    jobCard.status =
+      status || jobCard.status;
 
-    jobCard.items = items || jobCard.items;
+    jobCard.items =
+      items || jobCard.items;
 
-    jobCard.billing = billing || jobCard.billing;
+    jobCard.billing =
+      billing || jobCard.billing;
 
-    jobCard.notes = notes || jobCard.notes;
+    jobCard.notes =
+      notes || jobCard.notes;
 
     await jobCard.save();
+
+    // GET CUSTOMER DETAILS
+    const customer = await Customer.findById(
+      jobCard.customer
+    );
+
+    // CREATE NOTIFICATION
+    await Notification.create({
+      customer: customer._id,
+
+      customerNo: customer.customerNo,
+
+      title: "Job Card Updated",
+
+      message: `Your tailoring order ${jobCard.jobCardNo} status has been updated to ${jobCard.status}.`,
+
+      type: "Job Updated",
+
+      relatedJobCardNo: jobCard.jobCardNo,
+
+      notificationChannel: "System",
+    });
+
+    // POPULATE UPDATED DATA
+    const updatedJobCard = await JobCard.findById(
+      jobCard._id
+    )
+      .populate("customer")
+      .populate("assignedEmployee");
 
     res.status(200).json({
       success: true,
       message: "Job card updated successfully",
-      data: jobCard,
+      data: updatedJobCard,
     });
   } catch (error) {
     res.status(500).json({
@@ -307,6 +361,136 @@ exports.getOrdersByCustomerNo = async (req, res) => {
       },
       totalOrders: orders.length,
       data: orders,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+
+// GET JOB CARD SUMMARY
+exports.getJobCardSummary = async (
+  req,
+  res
+) => {
+  try {
+    const { jobCardNo } = req.params;
+
+    // FIND JOB CARD
+    const jobCard = await JobCard.findOne({
+      jobCardNo,
+      isDeleted: false,
+    })
+      .populate("customer")
+      .populate("assignedEmployee");
+
+    if (!jobCard) {
+      return res.status(404).json({
+        success: false,
+        message: "Job card not found",
+      });
+    }
+
+    // FIND RELATED INVOICES
+    const invoices = await Invoice.find({
+      jobCard: jobCard._id,
+      isDeleted: false,
+    });
+
+    // CALCULATIONS
+    const totalInvoices = invoices.length;
+
+    const totalInvoiceAmount =
+      invoices.reduce(
+        (sum, invoice) =>
+          sum +
+          (invoice.ledger.totalAmount || 0),
+        0
+      );
+
+    const totalPaidAmount =
+      invoices.reduce(
+        (sum, invoice) =>
+          sum +
+          (invoice.ledger.paidAmount || 0),
+        0
+      );
+
+    const totalPendingAmount =
+      invoices.reduce(
+        (sum, invoice) =>
+          sum +
+          (invoice.ledger.balanceAmount || 0),
+        0
+      );
+
+    // CHECK IF INVOICE GENERATED
+    const invoiceGenerated =
+      totalInvoices > 0;
+
+    // ESTIMATED ORDER VALUE
+    const estimatedOrderValue =
+      jobCard.billing?.grandTotal || 0;
+
+    // IF NO INVOICE GENERATED
+    const uninvoicedAmount =
+      !invoiceGenerated
+        ? estimatedOrderValue
+        : Math.max(
+            estimatedOrderValue -
+              totalInvoiceAmount,
+            0
+          );
+
+    res.status(200).json({
+      success: true,
+
+      jobCard: {
+        jobCardNo: jobCard.jobCardNo,
+        status: jobCard.status,
+        priority: jobCard.priority,
+        deliveryDate:
+          jobCard.deliveryDate,
+        trialDate: jobCard.trialDate,
+        notes: jobCard.notes,
+      },
+
+      customer: {
+        customerNo:
+          jobCard.customer.customerNo,
+        fullName:
+          jobCard.customer.fullName,
+        phone:
+          jobCard.customer.phone,
+      },
+
+      assignedEmployee: {
+        empNo:
+          jobCard.assignedEmployee
+            ?.empNo,
+        fullName:
+          jobCard.assignedEmployee
+            ?.fullName,
+      },
+
+      orderSummary: {
+        totalItems:
+          jobCard.items.length,
+        estimatedOrderValue,
+        totalInvoices,
+        invoiceGenerated,
+        totalInvoiceAmount,
+        totalPaidAmount,
+        totalPendingAmount,
+        uninvoicedAmount,
+      },
+
+      invoices,
+
+      items: jobCard.items,
     });
   } catch (error) {
     res.status(500).json({

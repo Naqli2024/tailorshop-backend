@@ -14,6 +14,8 @@ const auth = require("./routes/auth.routes");
 const customerRoutes = require("./routes/customerRoutes");
 const employeeRoutes = require("./routes/employeeRoutes");
 const jobCardRoutes = require("./routes/jobCardRoutes");
+const invoiceRoutes = require("./routes/invoiceRoutes");
+const ledgerRoutes = require("./routes/ledgerRoutes");
 const cors = require("cors");
 const path = require("path");
 
@@ -39,6 +41,8 @@ app.use("/api/auth", auth);
 app.use("/api/customers", customerRoutes);
 app.use("/api/employees", employeeRoutes);
 app.use("/api/jobcards", jobCardRoutes);
+app.use("/api/invoices", invoiceRoutes);
+app.use("/api/ledgers", ledgerRoutes);
 
 const PORT = process.env.PORT;
 app.listen(PORT, () => {
