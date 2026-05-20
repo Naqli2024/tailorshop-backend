@@ -130,8 +130,6 @@ exports.createInvoice = async (req, res) => {
     });
 
     // GENERATE LEDGER NUMBER
-    const currentYear = new Date().getFullYear();
-
     const ledgerCount = await Ledger.countDocuments({
       ledgerNo: {
         $regex: `^LED-${currentYear}`,
