@@ -2,6 +2,7 @@ const JobCard = require("../models/JobCard");
 const Customer = require("../models/Customer");
 const Employee = require("../models/Employee");
 const Notification = require("../models/Notification");
+const Invoice = require("../models/Invoice");
 
 // CREATE JOB CARD
 exports.createJobCard = async (req, res) => {
