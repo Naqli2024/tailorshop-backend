@@ -278,19 +278,12 @@ exports.getInvoiceByInvoiceNo = async (req, res) => {
   }
 };
 
-
 // RECEIVE PAYMENT
 exports.receivePayment = async (req, res) => {
   try {
     const { invoiceNo } = req.params;
 
-    const {
-      paymentMode,
-      referenceNo,
-      amount,
-      paymentType,
-      notes,
-    } = req.body;
+    const { paymentMode, referenceNo, amount, paymentType, notes } = req.body;
 
     // FIND INVOICE
     const invoice = await Invoice.findOne({
@@ -306,26 +299,18 @@ exports.receivePayment = async (req, res) => {
     }
 
     // CHECK FULLY PAID
-    if (
-      invoice.ledger.paymentStatus === "Paid"
-    ) {
+    if (invoice.ledger.paymentStatus === "Paid") {
       return res.status(400).json({
         success: false,
-        message:
-          "Invoice already fully paid",
+        message: "Invoice already fully paid",
       });
     }
 
     // VALIDATE AMOUNT
-    if (
-      amount <= 0 ||
-      amount >
-        invoice.ledger.balanceAmount
-    ) {
+    if (amount <= 0 || amount > invoice.ledger.balanceAmount) {
       return res.status(400).json({
         success: false,
-        message:
-          "Invalid payment amount",
+        message: "Invalid payment amount",
       });
     }
 
@@ -339,19 +324,13 @@ exports.receivePayment = async (req, res) => {
     });
 
     // CALCULATIONS
-    const newPaidAmount =
-      invoice.ledger.paidAmount + amount;
+    const newPaidAmount = invoice.ledger.paidAmount + amount;
 
-    const newBalanceAmount =
-      invoice.ledger.totalAmount -
-      newPaidAmount;
+    const newBalanceAmount = invoice.ledger.totalAmount - newPaidAmount;
 
     let paymentStatus = "Pending";
 
-    if (
-      newPaidAmount > 0 &&
-      newBalanceAmount > 0
-    ) {
+    if (newPaidAmount > 0 && newBalanceAmount > 0) {
       paymentStatus = "Partially Paid";
     }
 
@@ -360,40 +339,29 @@ exports.receivePayment = async (req, res) => {
     }
 
     // UPDATE LEDGER SECTION
-    invoice.ledger.paidAmount =
-      newPaidAmount;
+    invoice.ledger.paidAmount = newPaidAmount;
 
-    invoice.ledger.balanceAmount =
-      newBalanceAmount;
+    invoice.ledger.balanceAmount = newBalanceAmount;
 
-    invoice.ledger.paymentStatus =
-      paymentStatus;
+    invoice.ledger.paymentStatus = paymentStatus;
 
     await invoice.save();
 
     // GET CUSTOMER
-    const customer =
-      await Customer.findById(
-        invoice.customer
-      );
+    const customer = await Customer.findById(invoice.customer);
 
     // GENERATE LEDGER NUMBER
-    const currentYear =
-      new Date().getFullYear();
+    const currentYear = new Date().getFullYear();
 
-    const ledgerCount =
-      await Ledger.countDocuments({
-        ledgerNo: {
-          $regex: `^LED-${currentYear}`,
-        },
-      });
+    const ledgerCount = await Ledger.countDocuments({
+      ledgerNo: {
+        $regex: `^LED-${currentYear}`,
+      },
+    });
 
-    const sequenceNumber = String(
-      ledgerCount + 1
-    ).padStart(5, "0");
+    const sequenceNumber = String(ledgerCount + 1).padStart(5, "0");
 
-    const ledgerNo =
-      `LED-${currentYear}-${sequenceNumber}`;
+    const ledgerNo = `LED-${currentYear}-${sequenceNumber}`;
 
     // CREATE CREDIT LEDGER ENTRY
     await Ledger.create({
@@ -403,8 +371,7 @@ exports.receivePayment = async (req, res) => {
       invoice: invoice._id,
       invoiceNo: invoice.invoiceNo,
       transactionType: "Credit",
-      description:
-        `${paymentType} payment received`,
+      description: `${paymentType} payment received`,
       debit: 0,
       credit: amount,
       balance: newBalanceAmount,
@@ -413,30 +380,28 @@ exports.receivePayment = async (req, res) => {
       notes,
     });
 
+    // GET JOB CARD
+    const jobCard = await JobCard.findById(invoice.jobCard);
+
     // CREATE NOTIFICATION
     await Notification.create({
       customer: customer._id,
       customerNo: customer.customerNo,
       title: "Payment Received",
-      message:
-        `Payment of ₹${amount} received for invoice ${invoice.invoiceNo}. Remaining balance: ₹${newBalanceAmount}.`,
+      message: `Payment of ₹${amount} received for invoice ${invoice.invoiceNo}. Remaining balance: ₹${newBalanceAmount}.`,
       type: "Payment Reminder",
-      relatedJobCardNo: "",
+      relatedJobCardNo: jobCard?.jobCardNo || "",
       notificationChannel: "System",
     });
 
     // POPULATE RESPONSE
-    const updatedInvoice =
-      await Invoice.findById(
-        invoice._id
-      )
-        .populate("customer")
-        .populate("jobCard");
+    const updatedInvoice = await Invoice.findById(invoice._id)
+      .populate("customer")
+      .populate("jobCard");
 
     res.status(200).json({
       success: true,
-      message:
-        "Payment received successfully",
+      message: "Payment received successfully",
       data: updatedInvoice,
     });
   } catch (error) {

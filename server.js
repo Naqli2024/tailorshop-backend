@@ -16,6 +16,9 @@ const employeeRoutes = require("./routes/employeeRoutes");
 const jobCardRoutes = require("./routes/jobCardRoutes");
 const invoiceRoutes = require("./routes/invoiceRoutes");
 const ledgerRoutes = require("./routes/ledgerRoutes");
+const notificationRoutes = require("./routes/notificationRoutes");
+const dashboardRoutes = require("./routes/dashboardRoutes");
+
 const cors = require("cors");
 const path = require("path");
 
@@ -43,6 +46,8 @@ app.use("/api/employees", employeeRoutes);
 app.use("/api/jobcards", jobCardRoutes);
 app.use("/api/invoices", invoiceRoutes);
 app.use("/api/ledgers", ledgerRoutes);
+app.use("/api/notifications", notificationRoutes);
+app.use("/api/dashboard", dashboardRoutes);
 
 const PORT = process.env.PORT;
 app.listen(PORT, () => {
