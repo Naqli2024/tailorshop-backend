@@ -16,6 +16,7 @@ const itemSchema = new mongoose.Schema({
     },
 
     outerFabric: {
+      fabricName: String,
       material: String,
       color: String,
       pattern: String,
@@ -116,9 +117,12 @@ const jobCardSchema = new mongoose.Schema(
       type: String,
       enum: [
         "Pending",
+        "Assigned",
+        "Cutting",
+        "Stitching",
+        "Trial Pending",
         "In Progress",
-        "Trial",
-        "Ready",
+        "Completed",
         "Delivered",
         "Cancelled",
       ],

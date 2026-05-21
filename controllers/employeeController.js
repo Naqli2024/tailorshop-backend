@@ -1,4 +1,10 @@
 const Employee = require("../models/Employee");
+const JobCard = require("../models/JobCard");
+
+const garmentPoints = require(
+  "../utils/workloadPoints"
+);
+
 
 // CREATE EMPLOYEE
 exports.createEmployee = async (req, res) => {
@@ -226,3 +232,222 @@ exports.deleteEmployee = async (req, res) => {
     });
   }
 };
+
+
+// GET ALL EMPLOYEE WORKLOADS
+exports.getEmployeeWorkloads =
+  async (req, res) => {
+    try {
+      const employees =
+        await Employee.find({
+          isDeleted: false,
+        });
+
+      const result = [];
+
+      for (const emp of employees) {
+        const activeJobs =
+          await JobCard.find({
+            assignedEmployee: emp._id,
+
+            status: {
+              $in: [
+                "Pending",
+                "Assigned",
+                "Cutting",
+                "Stitching",
+                "Trial Pending",
+                "In Progress",
+              ],
+            },
+
+            isDeleted: false,
+          });
+
+        let assignedPoints = 0;
+
+        activeJobs.forEach((job) => {
+          job.items.forEach((item) => {
+            assignedPoints +=
+              garmentPoints[
+                item.dressType
+              ] || 1;
+          });
+        });
+
+        const capacity =
+          emp.dailyCapacityPoints || 10;
+
+        const workloadPercentage =
+          Math.round(
+            (assignedPoints /
+              capacity) *
+              100
+          );
+
+        let workloadStatus =
+          "Available";
+
+        if (
+          workloadPercentage > 50 &&
+          workloadPercentage <= 80
+        ) {
+          workloadStatus = "Busy";
+        }
+
+        if (
+          workloadPercentage > 80
+        ) {
+          workloadStatus =
+            "Overloaded";
+        }
+
+        result.push({
+          empNo: emp.empNo,
+
+          fullName:
+            emp.fullName,
+
+          role: emp.role,
+
+          skills:
+            emp.skills,
+
+          capacity,
+
+          assignedPoints,
+
+          workloadPercentage,
+
+          workloadStatus,
+
+          activeOrders:
+            activeJobs.length,
+        });
+      }
+
+      res.status(200).json({
+        success: true,
+        data: result,
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message:
+          error.message,
+      });
+    }
+  };
+
+
+  // Single Employee Workload
+  exports.getEmployeeWorkloadByEmpNo =
+  async (req, res) => {
+    try {
+      const { empNo } =
+        req.params;
+
+      const employee =
+        await Employee.findOne({
+          empNo,
+          isDeleted: false,
+        });
+
+      if (!employee) {
+        return res
+          .status(404)
+          .json({
+            success: false,
+            message:
+              "Employee not found",
+          });
+      }
+
+      const activeJobs =
+        await JobCard.find({
+          assignedEmployee:
+            employee._id,
+
+          status: {
+            $in: [
+              "Pending",
+              "Assigned",
+              "Cutting",
+              "Stitching",
+              "Trial Pending",
+              "In Progress",
+            ],
+          },
+
+          isDeleted: false,
+        });
+
+      let assignedPoints = 0;
+
+      activeJobs.forEach((job) => {
+        job.items.forEach((item) => {
+          assignedPoints +=
+            garmentPoints[
+              item.dressType
+            ] || 1;
+        });
+      });
+
+      const capacity =
+        employee.dailyCapacityPoints ||
+        10;
+
+      const workloadPercentage =
+        Math.round(
+          (assignedPoints /
+            capacity) *
+            100
+        );
+
+      let workloadStatus =
+        "Available";
+
+      if (
+        workloadPercentage > 50 &&
+        workloadPercentage <= 80
+      ) {
+        workloadStatus = "Busy";
+      }
+
+      if (
+        workloadPercentage > 80
+      ) {
+        workloadStatus =
+          "Overloaded";
+      }
+
+      res.status(200).json({
+        success: true,
+
+        data: {
+          empNo:
+            employee.empNo,
+
+          fullName:
+            employee.fullName,
+
+          assignedPoints,
+
+          capacity,
+
+          workloadPercentage,
+
+          workloadStatus,
+
+          activeOrders:
+            activeJobs.length,
+        },
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message:
+          error.message,
+      });
+    }
+  };

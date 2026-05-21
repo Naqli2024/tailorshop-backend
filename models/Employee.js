@@ -70,6 +70,11 @@ const employeeSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+
+    dailyCapacityPoints: {
+      type: Number,
+      default: 10,
+    },
   },
   {
     timestamps: true,
