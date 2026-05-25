@@ -3,6 +3,7 @@ const Customer = require("../models/Customer");
 const Employee = require("../models/Employee");
 const Notification = require("../models/Notification");
 const Invoice = require("../models/Invoice");
+const generateSequence = require("../utils/generateSequence");
 
 // CREATE JOB CARD
 exports.createJobCard = async (req, res) => {
@@ -18,8 +19,11 @@ exports.createJobCard = async (req, res) => {
       notes,
     } = req.body;
 
+    const businessId = req.user.businessId;
+
     // CHECK CUSTOMER EXISTS
     const customerExists = await Customer.findOne({
+      businessId,
       customerNo,
       isDeleted: false,
     });
@@ -33,6 +37,7 @@ exports.createJobCard = async (req, res) => {
 
     // CHECK EMPLOYEE EXISTS
     const employeeExists = await Employee.findOne({
+      businessId,
       empNo,
       isDeleted: false,
     });
@@ -44,36 +49,18 @@ exports.createJobCard = async (req, res) => {
       });
     }
 
-    // GENERATE JOB CARD NUMBER
     const currentYear = new Date().getFullYear();
 
-    // COUNT CURRENT YEAR JOB CARDS
-    const yearlyJobCardCount = await JobCard.countDocuments({
-      jobCardNo: {
-        $regex: `^JC-${currentYear}`,
-      },
-    });
+    const nextNumber = await generateSequence(
+      businessId,
+      `JOBCARD_${currentYear}`,
+    );
 
-    // GENERATE NUMBER
-    const sequenceNumber = String(yearlyJobCardCount + 1).padStart(5, "0");
-
-    // FINAL JOB CARD NUMBER
-    const jobCardNo = `JC-${currentYear}-${sequenceNumber}`;
-
-    // CHECK DUPLICATE
-    const duplicateJobCard = await JobCard.findOne({
-      jobCardNo,
-    });
-
-    if (duplicateJobCard) {
-      return res.status(400).json({
-        success: false,
-        message: "Duplicate job card number detected",
-      });
-    }
+    const jobCardNo = `JC-${currentYear}-${String(nextNumber).padStart(5, "0")}`;
 
     // CREATE JOB CARD
     const jobCard = await JobCard.create({
+      businessId,
       jobCardNo,
 
       // STORE OBJECT IDS
@@ -91,6 +78,7 @@ exports.createJobCard = async (req, res) => {
 
     // CREATE NOTIFICATION
     await Notification.create({
+      businessId,
       customer: customerExists._id,
 
       customerNo: customerExists.customerNo,
@@ -101,6 +89,7 @@ exports.createJobCard = async (req, res) => {
 
       type: "Job Created",
 
+      relatedJobCard: jobCard._id,
       relatedJobCardNo: jobCardNo,
 
       notificationChannel: "System",
@@ -127,7 +116,10 @@ exports.createJobCard = async (req, res) => {
 // GET ALL JOB CARDS
 exports.getAllJobCards = async (req, res) => {
   try {
+    const businessId = req.user.businessId;
+
     const jobCards = await JobCard.find({
+      businessId,
       isDeleted: false,
     })
       .populate("customer")
@@ -154,7 +146,10 @@ exports.getJobCardByJobCardNo = async (req, res) => {
   try {
     const { jobCardNo } = req.params;
 
+    const businessId = req.user.businessId;
+
     const jobCard = await JobCard.findOne({
+      businessId,
       jobCardNo,
       isDeleted: false,
     })
@@ -185,7 +180,10 @@ exports.updateJobCard = async (req, res) => {
   try {
     const { jobCardNo } = req.params;
 
+    const businessId = req.user.businessId;
+
     const jobCard = await JobCard.findOne({
+      businessId,
       jobCardNo,
       isDeleted: false,
     });
@@ -211,6 +209,7 @@ exports.updateJobCard = async (req, res) => {
     // VALIDATE EMPLOYEE USING EMPNO
     if (empNo) {
       const employeeExists = await Employee.findOne({
+        businessId,
         empNo,
         isDeleted: false,
       });
@@ -225,36 +224,38 @@ exports.updateJobCard = async (req, res) => {
       jobCard.assignedEmployee = employeeExists._id;
     }
 
-    jobCard.deliveryDate =
-      deliveryDate || jobCard.deliveryDate;
+    jobCard.deliveryDate = deliveryDate || jobCard.deliveryDate;
 
-    jobCard.trialDate =
-      trialDate || jobCard.trialDate;
+    jobCard.trialDate = trialDate || jobCard.trialDate;
 
-    jobCard.priority =
-      priority || jobCard.priority;
+    jobCard.priority = priority || jobCard.priority;
 
-    jobCard.status =
-      status || jobCard.status;
+    jobCard.status = status || jobCard.status;
 
-    jobCard.items =
-      items || jobCard.items;
+    if (items !== undefined) {
+      jobCard.items = items;
+    }
 
-    jobCard.billing =
-      billing || jobCard.billing;
+    if (billing !== undefined) {
+      jobCard.billing = billing;
+    }
 
-    jobCard.notes =
-      notes || jobCard.notes;
+    if (notes !== undefined) {
+      jobCard.notes = notes;
+    }
 
     await jobCard.save();
 
     // GET CUSTOMER DETAILS
-    const customer = await Customer.findById(
-      jobCard.customer
-    );
+    const customer = await Customer.findOne({
+      _id: jobCard.customer,
+      businessId,
+      isDeleted: false,
+    });
 
     // CREATE NOTIFICATION
     await Notification.create({
+      businessId,
       customer: customer._id,
 
       customerNo: customer.customerNo,
@@ -265,15 +266,14 @@ exports.updateJobCard = async (req, res) => {
 
       type: "Job Updated",
 
+      relatedJobCard: jobCard._id,
       relatedJobCardNo: jobCard.jobCardNo,
 
       notificationChannel: "System",
     });
 
     // POPULATE UPDATED DATA
-    const updatedJobCard = await JobCard.findById(
-      jobCard._id
-    )
+    const updatedJobCard = await JobCard.findById(jobCard._id)
       .populate("customer")
       .populate("assignedEmployee");
 
@@ -295,7 +295,10 @@ exports.deleteJobCard = async (req, res) => {
   try {
     const { jobCardNo } = req.params;
 
+    const businessId = req.user.businessId;
+
     const jobCard = await JobCard.findOne({
+      businessId,
       jobCardNo,
       isDeleted: false,
     });
@@ -304,6 +307,19 @@ exports.deleteJobCard = async (req, res) => {
       return res.status(404).json({
         success: false,
         message: "Job card not found",
+      });
+    }
+
+    const invoiceExists = await Invoice.exists({
+      businessId,
+      jobCard: jobCard._id,
+      isDeleted: false,
+    });
+
+    if (invoiceExists) {
+      return res.status(400).json({
+        success: false,
+        message: "Cannot delete job card linked to invoices",
       });
     }
 
@@ -323,14 +339,15 @@ exports.deleteJobCard = async (req, res) => {
   }
 };
 
-
 // GET ORDERS BY CUSTOMER NO
 exports.getOrdersByCustomerNo = async (req, res) => {
   try {
     const { customerNo } = req.params;
+    const businessId = req.user.businessId;
 
     // CHECK CUSTOMER EXISTS
     const customer = await Customer.findOne({
+      businessId,
       customerNo,
       isDeleted: false,
     });
@@ -344,6 +361,7 @@ exports.getOrdersByCustomerNo = async (req, res) => {
 
     // GET ALL ORDERS
     const orders = await JobCard.find({
+      businessId,
       customer: customer._id,
       isDeleted: false,
     })
@@ -371,17 +389,15 @@ exports.getOrdersByCustomerNo = async (req, res) => {
   }
 };
 
-
 // GET JOB CARD SUMMARY
-exports.getJobCardSummary = async (
-  req,
-  res
-) => {
+exports.getJobCardSummary = async (req, res) => {
   try {
     const { jobCardNo } = req.params;
+    const businessId = req.user.businessId;
 
     // FIND JOB CARD
     const jobCard = await JobCard.findOne({
+      businessId,
       jobCardNo,
       isDeleted: false,
     })
@@ -397,6 +413,7 @@ exports.getJobCardSummary = async (
 
     // FIND RELATED INVOICES
     const invoices = await Invoice.find({
+      businessId,
       jobCard: jobCard._id,
       isDeleted: false,
     });
@@ -404,47 +421,31 @@ exports.getJobCardSummary = async (
     // CALCULATIONS
     const totalInvoices = invoices.length;
 
-    const totalInvoiceAmount =
-      invoices.reduce(
-        (sum, invoice) =>
-          sum +
-          (invoice.ledger.totalAmount || 0),
-        0
-      );
+    const totalInvoiceAmount = invoices.reduce(
+      (sum, invoice) => sum + (invoice.ledger.totalAmount || 0),
+      0,
+    );
 
-    const totalPaidAmount =
-      invoices.reduce(
-        (sum, invoice) =>
-          sum +
-          (invoice.ledger.paidAmount || 0),
-        0
-      );
+    const totalPaidAmount = invoices.reduce(
+      (sum, invoice) => sum + (invoice.ledger.paidAmount || 0),
+      0,
+    );
 
-    const totalPendingAmount =
-      invoices.reduce(
-        (sum, invoice) =>
-          sum +
-          (invoice.ledger.balanceAmount || 0),
-        0
-      );
+    const totalPendingAmount = invoices.reduce(
+      (sum, invoice) => sum + (invoice.ledger.balanceAmount || 0),
+      0,
+    );
 
     // CHECK IF INVOICE GENERATED
-    const invoiceGenerated =
-      totalInvoices > 0;
+    const invoiceGenerated = totalInvoices > 0;
 
     // ESTIMATED ORDER VALUE
-    const estimatedOrderValue =
-      jobCard.billing?.grandTotal || 0;
+    const estimatedOrderValue = jobCard.billing?.grandTotal || 0;
 
     // IF NO INVOICE GENERATED
-    const uninvoicedAmount =
-      !invoiceGenerated
-        ? estimatedOrderValue
-        : Math.max(
-            estimatedOrderValue -
-              totalInvoiceAmount,
-            0
-          );
+    const uninvoicedAmount = !invoiceGenerated
+      ? estimatedOrderValue
+      : Math.max(estimatedOrderValue - totalInvoiceAmount, 0);
 
     res.status(200).json({
       success: true,
@@ -453,33 +454,24 @@ exports.getJobCardSummary = async (
         jobCardNo: jobCard.jobCardNo,
         status: jobCard.status,
         priority: jobCard.priority,
-        deliveryDate:
-          jobCard.deliveryDate,
+        deliveryDate: jobCard.deliveryDate,
         trialDate: jobCard.trialDate,
         notes: jobCard.notes,
       },
 
       customer: {
-        customerNo:
-          jobCard.customer.customerNo,
-        fullName:
-          jobCard.customer.fullName,
-        phone:
-          jobCard.customer.phone,
+        customerNo: jobCard.customer.customerNo,
+        fullName: jobCard.customer.fullName,
+        phone: jobCard.customer.phone,
       },
 
       assignedEmployee: {
-        empNo:
-          jobCard.assignedEmployee
-            ?.empNo,
-        fullName:
-          jobCard.assignedEmployee
-            ?.fullName,
+        empNo: jobCard.assignedEmployee?.empNo,
+        fullName: jobCard.assignedEmployee?.fullName,
       },
 
       orderSummary: {
-        totalItems:
-          jobCard.items.length,
+        totalItems: jobCard.items.length,
         estimatedOrderValue,
         totalInvoices,
         invoiceGenerated,

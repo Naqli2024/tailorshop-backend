@@ -1,18 +1,16 @@
 const Notification = require("../models/Notification");
 const Customer = require("../models/Customer");
 
-
-
 // GET NOTIFICATIONS BY CUSTOMER NO
-exports.getNotificationsByCustomerNo = async (
-  req,
-  res
-) => {
+exports.getNotificationsByCustomerNo = async (req, res) => {
   try {
     const { customerNo } = req.params;
 
     // CHECK CUSTOMER EXISTS
+    const businessId = req.user.businessId;
+
     const customer = await Customer.findOne({
+      businessId,
       customerNo,
       isDeleted: false,
     });
@@ -26,10 +24,14 @@ exports.getNotificationsByCustomerNo = async (
 
     // GET NOTIFICATIONS
     const notifications = await Notification.find({
-      customerNo,
+      businessId,
+      customer: customer._id,
+      isDeleted: false,
     }).sort({
       createdAt: -1,
     });
+
+    const unreadCount = notifications.filter((n) => !n.isRead).length;
 
     res.status(200).json({
       success: true,
@@ -40,8 +42,8 @@ exports.getNotificationsByCustomerNo = async (
         phone: customer.phone,
       },
 
-      totalNotifications:
-        notifications.length,
+      totalNotifications: notifications.length,
+      unreadCount,
 
       data: notifications,
     });

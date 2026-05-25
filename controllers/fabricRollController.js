@@ -1,3 +1,4 @@
+const mongoose = require("mongoose");
 const FabricRoll = require("../models/FabricRoll");
 const FabricUsage = require("../models/FabricUsage");
 
@@ -15,23 +16,14 @@ exports.createFabricRoll = async (req, res) => {
       reorderLevel,
       notes,
     } = req.body;
+    const businessId = req.user.businessId;
 
-    const count = await FabricRoll.countDocuments();
+    const nextNumber = await generateSequence(businessId, "FABRIC_ROLL");
 
-    const rollNo = `FR-${String(count + 1).padStart(4, "0")}`;
-
-    const duplicate = await FabricRoll.findOne({
-      rollNo,
-    });
-
-    if (duplicate) {
-      return res.status(400).json({
-        success: false,
-        message: "Duplicate roll number",
-      });
-    }
+    const rollNo = `FR-${String(nextNumber).padStart(4, "0")}`;
 
     const roll = await FabricRoll.create({
+      businessId,
       rollNo,
       fabricName,
       fabricType,
@@ -62,6 +54,7 @@ exports.createFabricRoll = async (req, res) => {
 exports.getAllFabricRolls = async (req, res) => {
   try {
     const rolls = await FabricRoll.find({
+      businessId: req.user.businessId,
       isDeleted: false,
     }).sort({ createdAt: -1 });
 
@@ -84,6 +77,7 @@ exports.getFabricRollByRollNo = async (req, res) => {
     const { rollNo } = req.params;
 
     const roll = await FabricRoll.findOne({
+      businessId: req.user.businessId,
       rollNo,
       isDeleted: false,
     });
@@ -113,6 +107,7 @@ exports.updateFabricRoll = async (req, res) => {
     const { rollNo } = req.params;
 
     const roll = await FabricRoll.findOne({
+      businessId: req.user.businessId,
       rollNo,
       isDeleted: false,
     });
@@ -175,6 +170,7 @@ exports.deleteFabricRoll = async (req, res) => {
     const { rollNo } = req.params;
 
     const roll = await FabricRoll.findOne({
+      businessId: req.user.businessId,
       rollNo,
       isDeleted: false,
     });
@@ -208,6 +204,7 @@ exports.deductFabric = async (req, res) => {
     const { rollNo, usedMeters, jobCardNo, reason } = req.body;
 
     const roll = await FabricRoll.findOne({
+      businessId: req.user.businessId,
       rollNo,
       isDeleted: false,
     });
@@ -240,11 +237,15 @@ exports.deductFabric = async (req, res) => {
 
     await roll.save();
 
-    const count = await FabricUsage.countDocuments();
+    const nextNumber = await generateSequence(
+      req.user.businessId,
+      "FABRIC_USAGE",
+    );
 
-    const transactionNo = `FUT-${String(count + 1).padStart(5, "0")}`;
+    const transactionNo = `FUT-${String(nextNumber).padStart(5, "0")}`;
 
     await FabricUsage.create({
+      businessId: req.user.businessId,
       transactionNo,
 
       fabricRoll: roll._id,
@@ -275,7 +276,9 @@ exports.deductFabric = async (req, res) => {
 // Get Fabric Usage History
 exports.getFabricUsageHistory = async (req, res) => {
   try {
-    const history = await FabricUsage.find()
+    const history = await FabricUsage.find({
+      businessId: req.user.businessId,
+    })
       .populate("fabricRoll", "fabricName fabricType color")
       .sort({
         createdAt: -1,
@@ -297,11 +300,16 @@ exports.getFabricUsageHistory = async (req, res) => {
 // Fabric Dashboard
 exports.getFabricDashboard = async (req, res) => {
   try {
+    const businessId = req.user.businessId;
+
     const rolls = await FabricRoll.find({
+      businessId,
       isDeleted: false,
     });
 
-    const usages = await FabricUsage.find();
+    const usages = await FabricUsage.find({
+      businessId,
+    });
 
     // TOTAL ROLLS
     const totalRolls = rolls.length;
@@ -370,6 +378,7 @@ exports.getFabricDashboard = async (req, res) => {
 
     if (mostUsedRollNo) {
       const roll = await FabricRoll.findOne({
+        businessId,
         rollNo: mostUsedRollNo,
       });
 
@@ -414,6 +423,7 @@ exports.getFabricDashboard = async (req, res) => {
 exports.getLowStockRolls = async (req, res) => {
   try {
     const rolls = await FabricRoll.find({
+      businessId: req.user.businessId,
       isDeleted: false,
     });
 
@@ -442,6 +452,11 @@ exports.getConsumptionReport = async (req, res) => {
   try {
     const report = await FabricUsage.aggregate([
       {
+        $match: {
+          businessId: new mongoose.Types.ObjectId(req.user.businessId),
+        },
+      },
+      {
         $group: {
           _id: "$rollNo",
 
@@ -465,6 +480,7 @@ exports.getConsumptionReport = async (req, res) => {
     const finalReport = await Promise.all(
       report.map(async (item) => {
         const fabric = await FabricRoll.findOne({
+          businessId: req.user.businessId,
           rollNo: item._id,
         });
 
@@ -499,6 +515,11 @@ exports.getConsumptionReport = async (req, res) => {
 exports.getUsageByJobCard = async (req, res) => {
   try {
     const report = await FabricUsage.aggregate([
+      {
+        $match: {
+          businessId: new mongoose.Types.ObjectId(req.user.businessId),
+        },
+      },
       {
         $group: {
           _id: "$jobCardNo",
@@ -537,6 +558,7 @@ exports.getUsageByJobCard = async (req, res) => {
 exports.getStockValueReport = async (req, res) => {
   try {
     const rolls = await FabricRoll.find({
+      businessId: req.user.businessId,
       isDeleted: false,
     });
 
@@ -573,35 +595,29 @@ exports.getStockValueReport = async (req, res) => {
   }
 };
 
-
 // Stock Movement History
-exports.getMovementHistory =
-  async (req, res) => {
-    try {
-      const history =
-        await FabricUsage.find()
-          .populate(
-            "fabricRoll",
-            "fabricName fabricType color"
-          )
-          .sort({
-            createdAt: -1,
-          });
-
-      res.status(200).json({
-        success: true,
-
-        total:
-          history.length,
-
-        data: history,
+exports.getMovementHistory = async (req, res) => {
+  try {
+    const history = await FabricUsage.find({
+      businessId: req.user.businessId,
+    })
+      .populate("fabricRoll", "fabricName fabricType color")
+      .sort({
+        createdAt: -1,
       });
-    } catch (error) {
-      res.status(500).json({
-        success: false,
 
-        message:
-          error.message,
-      });
-    }
-  };
+    res.status(200).json({
+      success: true,
+
+      total: history.length,
+
+      data: history,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+
+      message: error.message,
+    });
+  }
+};

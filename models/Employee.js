@@ -2,10 +2,16 @@ const mongoose = require("mongoose");
 
 const employeeSchema = new mongoose.Schema(
   {
+    businessId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Business",
+      required: true,
+      index: true,
+    },
+
     empNo: {
       type: String,
       required: true,
-      unique: true,
     },
 
     fullName: {
@@ -23,7 +29,6 @@ const employeeSchema = new mongoose.Schema(
     phone: {
       type: String,
       required: true,
-      unique: true,
       trim: true,
     },
 
@@ -79,6 +84,26 @@ const employeeSchema = new mongoose.Schema(
   {
     timestamps: true,
   },
+);
+
+employeeSchema.index(
+  {
+    businessId: 1,
+    empNo: 1,
+  },
+  {
+    unique: true,
+  },
+);
+
+employeeSchema.index(
+  {
+    businessId: 1,
+    phone: 1,
+  },
+  {
+    unique: true,
+  }
 );
 
 module.exports = mongoose.model("Employee", employeeSchema);

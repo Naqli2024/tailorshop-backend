@@ -83,7 +83,13 @@ const jobCardSchema = new mongoose.Schema(
     jobCardNo: {
       type: String,
       required: true,
-      unique: true,
+    },
+
+    businessId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Business",
+      required: true,
+      index: true,
     },
 
     customer: {
@@ -150,5 +156,35 @@ const jobCardSchema = new mongoose.Schema(
     timestamps: true,
   },
 );
+
+jobCardSchema.index(
+  {
+    businessId: 1,
+    jobCardNo: 1,
+  },
+  {
+    unique: true,
+  },
+);
+
+jobCardSchema.index({
+  businessId: 1,
+  customer: 1,
+});
+
+jobCardSchema.index({
+  businessId: 1,
+  assignedEmployee: 1,
+});
+
+jobCardSchema.index({
+  businessId: 1,
+  status: 1,
+});
+
+jobCardSchema.index({
+  businessId: 1,
+  deliveryDate: 1,
+});
 
 module.exports = mongoose.model("JobCard", jobCardSchema);

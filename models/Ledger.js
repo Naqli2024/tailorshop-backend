@@ -5,7 +5,13 @@ const ledgerSchema = new mongoose.Schema(
     ledgerNo: {
       type: String,
       required: true,
-      unique: true,
+    },
+
+    businessId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Business",
+      required: true,
+      index: true,
     },
 
     customer: {
@@ -53,16 +59,19 @@ const ledgerSchema = new mongoose.Schema(
 
     debit: {
       type: Number,
+      min: 0,
       default: 0,
     },
 
     credit: {
       type: Number,
+      min: 0,
       default: 0,
     },
 
     balance: {
       type: Number,
+      min: 0,
       required: true,
     },
 
@@ -91,5 +100,25 @@ const ledgerSchema = new mongoose.Schema(
     timestamps: true,
   },
 );
+
+ledgerSchema.index(
+  {
+    businessId: 1,
+    ledgerNo: 1,
+  },
+  {
+    unique: true,
+  }
+);
+
+ledgerSchema.index({
+  businessId: 1,
+  customerNo: 1,
+});
+
+ledgerSchema.index({
+  businessId: 1,
+  invoiceNo: 1,
+});
 
 module.exports = mongoose.model("Ledger", ledgerSchema);

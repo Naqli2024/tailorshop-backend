@@ -2,10 +2,15 @@ const mongoose = require("mongoose");
 
 const customerSchema = new mongoose.Schema(
   {
+    businessId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Business",
+      required: true,
+      index: true,
+    },
     customerNo: {
       type: String,
       required: true,
-      unique: true,
     },
 
     fullName: {
@@ -46,6 +51,16 @@ const customerSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
+  },
+);
+
+customerSchema.index(
+  {
+    businessId: 1,
+    customerNo: 1,
+  },
+  {
+    unique: true,
   },
 );
 

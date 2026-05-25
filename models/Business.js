@@ -7,6 +7,14 @@ const businessSchema = new mongoose.Schema(
       required: true,
     },
 
+    shopCode: {
+      type: String,
+      required: true,
+      unique: true,
+      lowercase: true,
+      trim: true,
+    },
+
     address: String,
 
     mobile: {

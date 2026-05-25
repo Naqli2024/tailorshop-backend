@@ -9,10 +9,10 @@ const generateOtp = () => {
 // Register Business + User
 exports.registerBusiness = async (req, res) => {
   try {
-    const { shopName, address, mobile, businessType, gstNo, username, password } = req.body;
+    const { shopName, shopCode, address, mobile, businessType, gstNo, username, password } = req.body;
 
     // Validate input
-    if (!shopName || !mobile || !username || !password) {
+    if (!shopName || !shopCode || !mobile || !username || !password) {
       return res.status(400).json({ message: "Missing required fields" });
     }
 
@@ -28,6 +28,7 @@ exports.registerBusiness = async (req, res) => {
     // Create Business
     const business = await Business.create({
       shopName,
+      shopCode,
       address,
       mobile,
       otp,

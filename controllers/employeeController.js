@@ -1,14 +1,13 @@
 const Employee = require("../models/Employee");
 const JobCard = require("../models/JobCard");
-
-const garmentPoints = require(
-  "../utils/workloadPoints"
-);
-
+const generateSequence = require("../utils/generateSequence");
+const garmentPoints = require("../utils/workloadPoints");
 
 // CREATE EMPLOYEE
 exports.createEmployee = async (req, res) => {
   try {
+    const businessId = req.user.businessId;
+
     const {
       fullName,
       role,
@@ -22,8 +21,8 @@ exports.createEmployee = async (req, res) => {
       notes,
     } = req.body;
 
-    // CHECK DUPLICATE PHONE
     const existingEmployee = await Employee.findOne({
+      businessId,
       phone,
       isDeleted: false,
     });
@@ -35,13 +34,12 @@ exports.createEmployee = async (req, res) => {
       });
     }
 
-    // GENERATE EMPLOYEE NUMBER
-    const employeeCount = await Employee.countDocuments();
+    const nextNumber = await generateSequence(businessId, "EMPLOYEE");
 
-    const empNo = `EMP${String(employeeCount + 1).padStart(4, "0")}`;
+    const empNo = `EMP${String(nextNumber).padStart(4, "0")}`;
 
-    // CREATE EMPLOYEE
     const employee = await Employee.create({
+      businessId,
       empNo,
       fullName,
       role,
@@ -68,11 +66,13 @@ exports.createEmployee = async (req, res) => {
   }
 };
 
-
 // GET ALL EMPLOYEES
 exports.getAllEmployees = async (req, res) => {
   try {
+    const businessId = req.user.businessId;
+
     const employees = await Employee.find({
+      businessId,
       isDeleted: false,
     }).sort({
       createdAt: -1,
@@ -91,13 +91,15 @@ exports.getAllEmployees = async (req, res) => {
   }
 };
 
-
 // GET EMPLOYEE BY EMP NO
 exports.getEmployeeByEmpNo = async (req, res) => {
   try {
     const { empNo } = req.params;
 
+    const businessId = req.user.businessId;
+
     const employee = await Employee.findOne({
+      businessId,
       empNo,
       isDeleted: false,
     });
@@ -121,7 +123,6 @@ exports.getEmployeeByEmpNo = async (req, res) => {
   }
 };
 
-
 // UPDATE EMPLOYEE
 exports.updateEmployee = async (req, res) => {
   try {
@@ -141,7 +142,10 @@ exports.updateEmployee = async (req, res) => {
     } = req.body;
 
     // CHECK EMPLOYEE EXISTS
+    const businessId = req.user.businessId;
+
     const employee = await Employee.findOne({
+      businessId,
       empNo,
       isDeleted: false,
     });
@@ -156,6 +160,7 @@ exports.updateEmployee = async (req, res) => {
     // CHECK DUPLICATE PHONE
     if (phone) {
       const duplicatePhone = await Employee.findOne({
+        businessId,
         phone,
         _id: { $ne: employee._id },
         isDeleted: false,
@@ -175,8 +180,7 @@ exports.updateEmployee = async (req, res) => {
     employee.email = email || employee.email;
     employee.address = address || employee.address;
     employee.joinedDate = joinedDate || employee.joinedDate;
-    employee.salaryPerMonth =
-      salaryPerMonth || employee.salaryPerMonth;
+    employee.salaryPerMonth = salaryPerMonth ?? employee.salaryPerMonth;
 
     employee.status = status || employee.status;
 
@@ -199,13 +203,15 @@ exports.updateEmployee = async (req, res) => {
   }
 };
 
-
-// DELETE EMPLOYEE 
+// DELETE EMPLOYEE
 exports.deleteEmployee = async (req, res) => {
   try {
     const { empNo } = req.params;
 
+    const businessId = req.user.businessId;
+
     const employee = await Employee.findOne({
+      businessId,
       empNo,
       isDeleted: false,
     });
@@ -233,221 +239,173 @@ exports.deleteEmployee = async (req, res) => {
   }
 };
 
-
 // GET ALL EMPLOYEE WORKLOADS
-exports.getEmployeeWorkloads =
-  async (req, res) => {
-    try {
-      const employees =
-        await Employee.find({
-          isDeleted: false,
-        });
+exports.getEmployeeWorkloads = async (req, res) => {
+  try {
+    const businessId = req.user.businessId;
 
-      const result = [];
+    const employees = await Employee.find({
+      businessId,
+      isDeleted: false,
+    });
 
-      for (const emp of employees) {
-        const activeJobs =
-          await JobCard.find({
-            assignedEmployee: emp._id,
+    const result = [];
 
-            status: {
-              $in: [
-                "Pending",
-                "Assigned",
-                "Cutting",
-                "Stitching",
-                "Trial Pending",
-                "In Progress",
-              ],
-            },
+    for (const emp of employees) {
+      const activeJobs = await JobCard.find({
+        businessId,
+        assignedEmployee: emp._id,
 
-            isDeleted: false,
-          });
+        status: {
+          $in: [
+            "Pending",
+            "Assigned",
+            "Cutting",
+            "Stitching",
+            "Trial Pending",
+            "In Progress",
+          ],
+        },
 
-        let assignedPoints = 0;
-
-        activeJobs.forEach((job) => {
-          job.items.forEach((item) => {
-            assignedPoints +=
-              garmentPoints[
-                item.dressType
-              ] || 1;
-          });
-        });
-
-        const capacity =
-          emp.dailyCapacityPoints || 10;
-
-        const workloadPercentage =
-          Math.round(
-            (assignedPoints /
-              capacity) *
-              100
-          );
-
-        let workloadStatus =
-          "Available";
-
-        if (
-          workloadPercentage > 50 &&
-          workloadPercentage <= 80
-        ) {
-          workloadStatus = "Busy";
-        }
-
-        if (
-          workloadPercentage > 80
-        ) {
-          workloadStatus =
-            "Overloaded";
-        }
-
-        result.push({
-          empNo: emp.empNo,
-
-          fullName:
-            emp.fullName,
-
-          role: emp.role,
-
-          skills:
-            emp.skills,
-
-          capacity,
-
-          assignedPoints,
-
-          workloadPercentage,
-
-          workloadStatus,
-
-          activeOrders:
-            activeJobs.length,
-        });
-      }
-
-      res.status(200).json({
-        success: true,
-        data: result,
+        isDeleted: false,
       });
-    } catch (error) {
-      res.status(500).json({
-        success: false,
-        message:
-          error.message,
-      });
-    }
-  };
-
-
-  // Single Employee Workload
-  exports.getEmployeeWorkloadByEmpNo =
-  async (req, res) => {
-    try {
-      const { empNo } =
-        req.params;
-
-      const employee =
-        await Employee.findOne({
-          empNo,
-          isDeleted: false,
-        });
-
-      if (!employee) {
-        return res
-          .status(404)
-          .json({
-            success: false,
-            message:
-              "Employee not found",
-          });
-      }
-
-      const activeJobs =
-        await JobCard.find({
-          assignedEmployee:
-            employee._id,
-
-          status: {
-            $in: [
-              "Pending",
-              "Assigned",
-              "Cutting",
-              "Stitching",
-              "Trial Pending",
-              "In Progress",
-            ],
-          },
-
-          isDeleted: false,
-        });
 
       let assignedPoints = 0;
 
       activeJobs.forEach((job) => {
         job.items.forEach((item) => {
-          assignedPoints +=
-            garmentPoints[
-              item.dressType
-            ] || 1;
+          assignedPoints += garmentPoints[item.dressType] || 1;
         });
       });
 
-      const capacity =
-        employee.dailyCapacityPoints ||
-        10;
+      const capacity = emp.dailyCapacityPoints || 10;
 
-      const workloadPercentage =
-        Math.round(
-          (assignedPoints /
-            capacity) *
-            100
-        );
+      const workloadPercentage = Math.round((assignedPoints / capacity) * 100);
 
-      let workloadStatus =
-        "Available";
+      let workloadStatus = "Available";
 
-      if (
-        workloadPercentage > 50 &&
-        workloadPercentage <= 80
-      ) {
+      if (workloadPercentage > 50 && workloadPercentage <= 80) {
         workloadStatus = "Busy";
       }
 
-      if (
-        workloadPercentage > 80
-      ) {
-        workloadStatus =
-          "Overloaded";
+      if (workloadPercentage > 80) {
+        workloadStatus = "Overloaded";
       }
 
-      res.status(200).json({
-        success: true,
+      result.push({
+        empNo: emp.empNo,
 
-        data: {
-          empNo:
-            employee.empNo,
+        fullName: emp.fullName,
 
-          fullName:
-            employee.fullName,
+        role: emp.role,
 
-          assignedPoints,
+        skills: emp.skills,
 
-          capacity,
+        capacity,
 
-          workloadPercentage,
+        assignedPoints,
 
-          workloadStatus,
+        workloadPercentage,
 
-          activeOrders:
-            activeJobs.length,
-        },
-      });
-    } catch (error) {
-      res.status(500).json({
-        success: false,
-        message:
-          error.message,
+        workloadStatus,
+
+        activeOrders: activeJobs.length,
       });
     }
-  };
+
+    res.status(200).json({
+      success: true,
+      data: result,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// Single Employee Workload
+exports.getEmployeeWorkloadByEmpNo = async (req, res) => {
+  try {
+    const { empNo } = req.params;
+
+    const employee = await Employee.findOne({
+      businessId: req.user.businessId,
+      empNo,
+      isDeleted: false,
+    });
+
+    if (!employee) {
+      return res.status(404).json({
+        success: false,
+        message: "Employee not found",
+      });
+    }
+
+    const activeJobs = await JobCard.find({
+      businessId: req.user.businessId,
+      assignedEmployee: employee._id,
+
+      status: {
+        $in: [
+          "Pending",
+          "Assigned",
+          "Cutting",
+          "Stitching",
+          "Trial Pending",
+          "In Progress",
+        ],
+      },
+
+      isDeleted: false,
+    });
+
+    let assignedPoints = 0;
+
+    activeJobs.forEach((job) => {
+      job.items.forEach((item) => {
+        assignedPoints += garmentPoints[item.dressType] || 1;
+      });
+    });
+
+    const capacity = employee.dailyCapacityPoints || 10;
+
+    const workloadPercentage = Math.round((assignedPoints / capacity) * 100);
+
+    let workloadStatus = "Available";
+
+    if (workloadPercentage > 50 && workloadPercentage <= 80) {
+      workloadStatus = "Busy";
+    }
+
+    if (workloadPercentage > 80) {
+      workloadStatus = "Overloaded";
+    }
+
+    res.status(200).json({
+      success: true,
+
+      data: {
+        empNo: employee.empNo,
+
+        fullName: employee.fullName,
+
+        assignedPoints,
+
+        capacity,
+
+        workloadPercentage,
+
+        workloadStatus,
+
+        activeOrders: activeJobs.length,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};

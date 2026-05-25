@@ -4,8 +4,14 @@ const fabricRollSchema = new mongoose.Schema(
   {
     rollNo: {
       type: String,
-      unique: true,
       required: true,
+    },
+
+    businessId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Business",
+      required: true,
+      index: true,
     },
 
     fabricName: {
@@ -73,6 +79,16 @@ const fabricRollSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
+  },
+);
+
+fabricRollSchema.index(
+  {
+    businessId: 1,
+    rollNo: 1,
+  },
+  {
+    unique: true,
   },
 );
 

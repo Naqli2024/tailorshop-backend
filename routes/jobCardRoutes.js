@@ -19,19 +19,13 @@ router.post("/create", auth, createJobCard);
 router.get("/all", auth, getAllJobCards);
 
 // GET ORDERS BY CUSTOMER NO
-router.get(
-  "/customer/:customerNo",
-  getOrdersByCustomerNo
-);
+router.get("/customer/:customerNo", auth, getOrdersByCustomerNo);
+
+// JOB CARD SUMMARY
+router.get("/summary/:jobCardNo", auth, getJobCardSummary);
 
 // GET JOB CARD BY NO
 router.get("/:jobCardNo", auth, getJobCardByJobCardNo);
-
-// JOB CARD SUMMARY
-router.get(
-  "/summary/:jobCardNo",
-  getJobCardSummary
-);
 
 // UPDATE JOB CARD
 router.put("/:jobCardNo", auth, updateJobCard);

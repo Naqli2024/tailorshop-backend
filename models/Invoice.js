@@ -8,13 +8,7 @@ const paymentSchema = new mongoose.Schema({
 
   paymentMode: {
     type: String,
-    enum: [
-      "Cash",
-      "UPI",
-      "Card",
-      "Bank Transfer",
-      "Cheque",
-    ],
+    enum: ["Cash", "UPI", "Card", "Bank Transfer", "Cheque"],
     required: true,
   },
 
@@ -40,7 +34,13 @@ const invoiceSchema = new mongoose.Schema(
     invoiceNo: {
       type: String,
       required: true,
-      unique: true,
+    },
+
+    businessId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Business",
+      required: true,
+      index: true,
     },
 
     jobCard: {
@@ -121,22 +121,14 @@ const invoiceSchema = new mongoose.Schema(
 
       paymentStatus: {
         type: String,
-        enum: [
-          "Pending",
-          "Partially Paid",
-          "Paid",
-        ],
+        enum: ["Pending", "Partially Paid", "Paid"],
         default: "Pending",
       },
     },
 
     status: {
       type: String,
-      enum: [
-        "Draft",
-        "Active",
-        "Cancelled",
-      ],
+      enum: ["Draft", "Active", "Cancelled"],
       default: "Active",
     },
 
@@ -152,10 +144,27 @@ const invoiceSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
+  },
+);
+
+invoiceSchema.index(
+  {
+    businessId: 1,
+    invoiceNo: 1,
+  },
+  {
+    unique: true,
   }
 );
 
-module.exports = mongoose.model(
-  "Invoice",
-  invoiceSchema
-);
+invoiceSchema.index({
+  businessId: 1,
+  customer: 1,
+});
+
+invoiceSchema.index({
+  businessId: 1,
+  jobCard: 1,
+});
+
+module.exports = mongoose.model("Invoice", invoiceSchema);

@@ -2,6 +2,13 @@ const mongoose = require("mongoose");
 
 const notificationSchema = new mongoose.Schema(
   {
+    businessId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Business",
+      required: true,
+      index: true,
+    },
+
     customer: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Customer",
@@ -36,6 +43,12 @@ const notificationSchema = new mongoose.Schema(
       required: true,
     },
 
+    relatedJobCard: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "JobCard",
+      default: null,
+    },
+
     relatedJobCardNo: {
       type: String,
       default: "",
@@ -48,30 +61,52 @@ const notificationSchema = new mongoose.Schema(
 
     deliveryStatus: {
       type: String,
-      enum: [
-        "Pending",
-        "Sent",
-        "Failed",
-      ],
+      enum: ["Pending", "Sent", "Failed"],
       default: "Pending",
     },
 
     notificationChannel: {
       type: String,
-      enum: [
-        "System",
-        "WhatsApp",
-        "SMS",
-      ],
+      enum: ["System", "WhatsApp", "SMS"],
       default: "System",
+    },
+    isDeleted: {
+      type: Boolean,
+      default: false,
     },
   },
   {
     timestamps: true,
-  }
+  },
 );
 
-module.exports = mongoose.model(
-  "Notification",
-  notificationSchema
-);
+notificationSchema.index({
+  businessId: 1,
+  customerNo: 1,
+});
+
+notificationSchema.index({
+  businessId: 1,
+  customer: 1,
+});
+
+notificationSchema.index({
+  businessId: 1,
+  isRead: 1,
+});
+notificationSchema.index({
+  businessId: 1,
+  createdAt: -1,
+});
+
+notificationSchema.index({
+  businessId: 1,
+  type: 1,
+});
+
+notificationSchema.index({
+  businessId: 1,
+  deliveryStatus: 1,
+});
+
+module.exports = mongoose.model("Notification", notificationSchema);

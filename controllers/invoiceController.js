@@ -3,15 +3,19 @@ const JobCard = require("../models/JobCard");
 const Customer = require("../models/Customer");
 const Notification = require("../models/Notification");
 const Ledger = require("../models/Ledger");
+const Business = require("../models/Business");
+const generateSequence = require("../utils/generateSequence");
 
 // CREATE INVOICE
 exports.createInvoice = async (req, res) => {
   try {
     const { jobCardNo, customerNo, billingItems, totals, payments, notes } =
       req.body;
+    const businessId = req.user.businessId;
 
     // CHECK CUSTOMER
     const customer = await Customer.findOne({
+      businessId,
       customerNo,
       isDeleted: false,
     });
@@ -25,6 +29,7 @@ exports.createInvoice = async (req, res) => {
 
     // CHECK JOB CARD
     const jobCard = await JobCard.findOne({
+      businessId,
       jobCardNo,
       isDeleted: false,
     });
@@ -37,20 +42,16 @@ exports.createInvoice = async (req, res) => {
     }
 
     // GENERATE INVOICE NUMBER
-    const currentYear = new Date().getFullYear();
+    const nextNumber = await generateSequence(
+      businessId,
+      `INVOICE_${currentYear}`,
+    );
 
-    const yearlyInvoiceCount = await Invoice.countDocuments({
-      invoiceNo: {
-        $regex: `^INV-${currentYear}`,
-      },
-    });
-
-    const sequenceNumber = String(yearlyInvoiceCount + 1).padStart(5, "0");
-
-    const invoiceNo = `INV-${currentYear}-${sequenceNumber}`;
+    const invoiceNo = `INV-${currentYear}-${String(nextNumber).padStart(5, "0")}`;
 
     // CHECK DUPLICATE
     const duplicateInvoice = await Invoice.findOne({
+      businessId,
       invoiceNo,
     });
 
@@ -98,6 +99,7 @@ exports.createInvoice = async (req, res) => {
 
     // CREATE INVOICE
     const invoice = await Invoice.create({
+      businessId,
       invoiceNo,
 
       jobCard: jobCard._id,
@@ -131,6 +133,7 @@ exports.createInvoice = async (req, res) => {
 
     // GENERATE LEDGER NUMBER
     const ledgerCount = await Ledger.countDocuments({
+      businessId,
       ledgerNo: {
         $regex: `^LED-${currentYear}`,
       },
@@ -142,6 +145,7 @@ exports.createInvoice = async (req, res) => {
 
     // CREATE DEBIT ENTRY
     await Ledger.create({
+      businessId,
       ledgerNo,
       customer: customer._id,
       customerNo: customer.customerNo,
@@ -163,6 +167,7 @@ exports.createInvoice = async (req, res) => {
       runningBalance -= payment.amount;
 
       const paymentLedgerCount = await Ledger.countDocuments({
+        businessId,
         ledgerNo: {
           $regex: `^LED-${currentYear}`,
         },
@@ -176,6 +181,7 @@ exports.createInvoice = async (req, res) => {
       const paymentLedgerNo = `LED-${currentYear}-${paymentLedgerSequence}`;
 
       await Ledger.create({
+        businessId,
         ledgerNo: paymentLedgerNo,
         customer: customer._id,
         customerNo: customer.customerNo,
@@ -195,11 +201,13 @@ exports.createInvoice = async (req, res) => {
 
     // CREATE NOTIFICATION
     await Notification.create({
+      businessId,
       customer: customer._id,
       customerNo: customer.customerNo,
       title: "Invoice Generated",
       message: `Invoice ${invoiceNo} generated successfully. Pending amount: ₹${balanceAmount}.`,
       type: "Payment Reminder",
+      relatedJobCard: jobCard._id,
       relatedJobCardNo: jobCardNo,
       notificationChannel: "System",
     });
@@ -225,7 +233,10 @@ exports.createInvoice = async (req, res) => {
 // GET ALL INVOICES
 exports.getAllInvoices = async (req, res) => {
   try {
+    const businessId = req.user.businessId;
+
     const invoices = await Invoice.find({
+      businessId,
       isDeleted: false,
     })
       .populate("customer")
@@ -250,9 +261,11 @@ exports.getAllInvoices = async (req, res) => {
 // GET INVOICE BY INVOICE NO
 exports.getInvoiceByInvoiceNo = async (req, res) => {
   try {
+    const businessId = req.user.businessId;
     const { invoiceNo } = req.params;
 
     const invoice = await Invoice.findOne({
+      businessId,
       invoiceNo,
       isDeleted: false,
     })
@@ -278,15 +291,64 @@ exports.getInvoiceByInvoiceNo = async (req, res) => {
   }
 };
 
+// Public API invoice
+exports.getPublicInvoice = async (req, res) => {
+  try {
+    const { shopCode, invoiceNo } = req.params;
+
+    const business = await Business.findOne({
+      shopCode,
+    });
+
+    if (!business) {
+      return res.status(404).json({
+        success: false,
+        message: "Business not found",
+      });
+    }
+
+    const invoice = await Invoice.findOne({
+      businessId: business._id,
+      invoiceNo,
+      isDeleted: false,
+    })
+      .populate("customer", "customerNo fullName phone")
+      .populate("jobCard", "jobCardNo deliveryDate status");
+
+    if (!invoice) {
+      return res.status(404).json({
+        success: false,
+        message: "Invoice not found",
+      });
+    }
+
+    res.json({
+      success: true,
+      business: {
+        shopName: business.shopName,
+        mobile: business.mobile,
+      },
+      data: invoice,
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
 // RECEIVE PAYMENT
 exports.receivePayment = async (req, res) => {
   try {
     const { invoiceNo } = req.params;
 
     const { paymentMode, referenceNo, amount, paymentType, notes } = req.body;
+    const businessId = req.user.businessId;
 
     // FIND INVOICE
     const invoice = await Invoice.findOne({
+      businessId,
       invoiceNo,
       isDeleted: false,
     });
@@ -348,12 +410,17 @@ exports.receivePayment = async (req, res) => {
     await invoice.save();
 
     // GET CUSTOMER
-    const customer = await Customer.findById(invoice.customer);
+    const customer = await Customer.findOne({
+      _id: invoice.customer,
+      businessId,
+      isDeleted: false,
+    });
 
     // GENERATE LEDGER NUMBER
     const currentYear = new Date().getFullYear();
 
     const ledgerCount = await Ledger.countDocuments({
+      businessId,
       ledgerNo: {
         $regex: `^LED-${currentYear}`,
       },
@@ -365,6 +432,7 @@ exports.receivePayment = async (req, res) => {
 
     // CREATE CREDIT LEDGER ENTRY
     await Ledger.create({
+      businessId,
       ledgerNo,
       customer: customer._id,
       customerNo: customer.customerNo,
@@ -381,15 +449,21 @@ exports.receivePayment = async (req, res) => {
     });
 
     // GET JOB CARD
-    const jobCard = await JobCard.findById(invoice.jobCard);
+    const jobCard = await JobCard.findOne({
+      _id: invoice.jobCard,
+      businessId,
+      isDeleted: false,
+    });
 
     // CREATE NOTIFICATION
     await Notification.create({
+      businessId,
       customer: customer._id,
       customerNo: customer.customerNo,
       title: "Payment Received",
       message: `Payment of ₹${amount} received for invoice ${invoice.invoiceNo}. Remaining balance: ₹${newBalanceAmount}.`,
       type: "Payment Reminder",
+      relatedJobCard: jobCard._id,
       relatedJobCardNo: jobCard?.jobCardNo || "",
       notificationChannel: "System",
     });
