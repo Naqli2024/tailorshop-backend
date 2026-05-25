@@ -3,36 +3,26 @@ const JobCard = require("../models/JobCard");
 const Customer = require("../models/Customer");
 const Employee = require("../models/Employee");
 
-
-
 // SALES OVERVIEW
-exports.getSalesOverview = async (
-  req,
-  res
-) => {
+exports.getSalesOverview = async (req, res) => {
   try {
     const today = new Date();
 
     const startOfToday = new Date(
       today.getFullYear(),
       today.getMonth(),
-      today.getDate()
+      today.getDate(),
     );
 
-    const startOfMonth = new Date(
-      today.getFullYear(),
-      today.getMonth(),
-      1
-    );
+    const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
 
-    const startOfYear = new Date(
-      today.getFullYear(),
-      0,
-      1
-    );
+    const startOfYear = new Date(today.getFullYear(), 0, 1);
+
+    const businessId = req.user.businessId;
 
     // TODAY SALES
     const todayInvoices = await Invoice.find({
+      businessId,
       createdAt: {
         $gte: startOfToday,
       },
@@ -40,67 +30,52 @@ exports.getSalesOverview = async (
     });
 
     // MONTH SALES
-    const monthlyInvoices =
-      await Invoice.find({
-        createdAt: {
-          $gte: startOfMonth,
-        },
-        isDeleted: false,
-      });
+    const monthlyInvoices = await Invoice.find({
+      businessId,
+      createdAt: {
+        $gte: startOfMonth,
+      },
+      isDeleted: false,
+    });
 
     // YEAR SALES
-    const yearlyInvoices =
-      await Invoice.find({
-        createdAt: {
-          $gte: startOfYear,
-        },
-        isDeleted: false,
-      });
+    const yearlyInvoices = await Invoice.find({
+      businessId,
+      createdAt: {
+        $gte: startOfYear,
+      },
+      isDeleted: false,
+    });
 
-    const todaySales =
-      todayInvoices.reduce(
-        (sum, inv) =>
-          sum +
-          (inv.ledger.totalAmount || 0),
-        0
-      );
+    const todaySales = todayInvoices.reduce(
+      (sum, inv) => sum + (inv.ledger.totalAmount || 0),
+      0,
+    );
 
-    const monthlySales =
-      monthlyInvoices.reduce(
-        (sum, inv) =>
-          sum +
-          (inv.ledger.totalAmount || 0),
-        0
-      );
+    const monthlySales = monthlyInvoices.reduce(
+      (sum, inv) => sum + (inv.ledger.totalAmount || 0),
+      0,
+    );
 
-    const yearlySales =
-      yearlyInvoices.reduce(
-        (sum, inv) =>
-          sum +
-          (inv.ledger.totalAmount || 0),
-        0
-      );
+    const yearlySales = yearlyInvoices.reduce(
+      (sum, inv) => sum + (inv.ledger.totalAmount || 0),
+      0,
+    );
 
-    const pendingCollections =
-      yearlyInvoices.reduce(
-        (sum, inv) =>
-          sum +
-          (inv.ledger.balanceAmount || 0),
-        0
-      );
+    const pendingCollections = yearlyInvoices.reduce(
+      (sum, inv) => sum + (inv.ledger.balanceAmount || 0),
+      0,
+    );
 
-    const todayPaymentsReceived =
-      todayInvoices.reduce(
-        (sum, inv) =>
-          sum +
-          (inv.ledger.paidAmount || 0),
-        0
-      );
+    const todayPaymentsReceived = todayInvoices.reduce(
+      (sum, inv) => sum + (inv.ledger.paidAmount || 0),
+      0,
+    );
 
-    const totalOrders =
-      await JobCard.countDocuments({
-        isDeleted: false,
-      });
+    const totalOrders = await JobCard.countDocuments({
+      businessId,
+      isDeleted: false,
+    });
 
     res.status(200).json({
       success: true,
@@ -116,8 +91,7 @@ exports.getSalesOverview = async (
 
         pendingCollections,
 
-        totalInvoices:
-          yearlyInvoices.length,
+        totalInvoices: yearlyInvoices.length,
 
         totalOrders,
       },
@@ -130,15 +104,12 @@ exports.getSalesOverview = async (
   }
 };
 
-
-
 // REVENUE BY DRESS TYPE
-exports.getRevenueByDressType = async (
-  req,
-  res
-) => {
+exports.getRevenueByDressType = async (req, res) => {
   try {
+    const businessId = req.user.businessId;
     const jobCards = await JobCard.find({
+      businessId,
       isDeleted: false,
     });
 
@@ -158,13 +129,11 @@ exports.getRevenueByDressType = async (
 
         revenueMap[type].orders += 1;
 
-        revenueMap[type].revenue +=
-          item.pricing?.total || 0;
+        revenueMap[type].revenue += item.pricing?.total || 0;
       });
     });
 
-    const result =
-      Object.values(revenueMap);
+    const result = Object.values(revenueMap);
 
     res.status(200).json({
       success: true,
@@ -178,220 +147,178 @@ exports.getRevenueByDressType = async (
   }
 };
 
-
-
 // EMPLOYEE PERFORMANCE
-exports.getEmployeePerformance =
-  async (req, res) => {
-    try {
-      const employees =
-        await Employee.find({
-          isDeleted: false,
-        });
+exports.getEmployeePerformance = async (req, res) => {
+  try {
+    const businessId = req.user.businessId;
 
-      const result = [];
+    const employees = await Employee.find({
+      businessId,
+      isDeleted: false,
+    });
 
-      for (const emp of employees) {
-        const jobs =
-          await JobCard.find({
-            assignedEmployee: emp._id,
-            isDeleted: false,
-          });
+    const result = [];
 
-        let revenueGenerated = 0;
-
-        jobs.forEach((job) => {
-          revenueGenerated +=
-            job.billing?.grandTotal || 0;
-        });
-
-        result.push({
-          empNo: emp.empNo,
-
-          fullName: emp.fullName,
-
-          ordersHandled:
-            jobs.length,
-
-          revenueGenerated,
-        });
-      }
-
-      res.status(200).json({
-        success: true,
-        data: result,
+    for (const emp of employees) {
+      const jobs = await JobCard.find({
+        businessId,
+        assignedEmployee: emp._id,
+        isDeleted: false,
       });
-    } catch (error) {
-      res.status(500).json({
-        success: false,
-        message: error.message,
+
+      let revenueGenerated = 0;
+
+      jobs.forEach((job) => {
+        revenueGenerated += job.billing?.grandTotal || 0;
+      });
+
+      result.push({
+        empNo: emp.empNo,
+
+        fullName: emp.fullName,
+
+        ordersHandled: jobs.length,
+
+        revenueGenerated,
       });
     }
-  };
 
-
+    res.status(200).json({
+      success: true,
+      data: result,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
 
 // PENDING COLLECTIONS
-exports.getPendingCollections =
-  async (req, res) => {
-    try {
-      const invoices =
-        await Invoice.find({
-          isDeleted: false,
-        }).populate("customer");
+exports.getPendingCollections = async (req, res) => {
+  try {
+    const businessId = req.user.businessId;
 
-      const pendingInvoices =
-        invoices.filter(
-          (inv) =>
-            inv.ledger.balanceAmount > 0
-        );
+    const invoices = await Invoice.find({
+      businessId,
+      "ledger.balanceAmount": {
+        $gt: 0,
+      },
+      isDeleted: false,
+    }).populate("customer");
 
-      const totalPendingAmount =
-        pendingInvoices.reduce(
-          (sum, inv) =>
-            sum +
-            inv.ledger.balanceAmount,
-          0
-        );
+    const pendingInvoices = invoices.filter(
+      (inv) => inv.ledger.balanceAmount > 0,
+    );
 
-      res.status(200).json({
-        success: true,
+    const totalPendingAmount = pendingInvoices.reduce(
+      (sum, inv) => sum + inv.ledger.balanceAmount,
+      0,
+    );
 
-        totalPendingInvoices:
-          pendingInvoices.length,
+    res.status(200).json({
+      success: true,
 
-        totalPendingAmount,
+      totalPendingInvoices: pendingInvoices.length,
 
-        data: pendingInvoices.map(
-          (inv) => ({
-            invoiceNo:
-              inv.invoiceNo,
+      totalPendingAmount,
 
-            customerNo:
-              inv.customer
-                ?.customerNo,
+      data: pendingInvoices.map((inv) => ({
+        invoiceNo: inv.invoiceNo,
 
-            customerName:
-              inv.customer
-                ?.fullName,
+        customerNo: inv.customer?.customerNo,
 
-            totalAmount:
-              inv.ledger
-                ?.totalAmount,
+        customerName: inv.customer?.fullName,
 
-            paidAmount:
-              inv.ledger
-                ?.paidAmount,
+        totalAmount: inv.ledger?.totalAmount,
 
-            balanceAmount:
-              inv.ledger
-                ?.balanceAmount,
+        paidAmount: inv.ledger?.paidAmount,
 
-            paymentStatus:
-              inv.ledger
-                ?.paymentStatus,
-          })
-        ),
-      });
-    } catch (error) {
-      res.status(500).json({
-        success: false,
-        message: error.message,
-      });
-    }
-  };
+        balanceAmount: inv.ledger?.balanceAmount,
 
-
+        paymentStatus: inv.ledger?.paymentStatus,
+      })),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
 
 // CUSTOMER INSIGHTS
-exports.getCustomerInsights =
-  async (req, res) => {
-    try {
-      const customers =
-        await Customer.find({
-          isDeleted: false,
-        });
+exports.getCustomerInsights = async (req, res) => {
+  try {
+    const businessId = req.user.businessId;
 
-      const invoices =
-        await Invoice.find({
-          isDeleted: false,
-        });
+    const customers = await Customer.find({
+      businessId,
+      isDeleted: false,
+    });
 
-      let vipCustomers = 0;
-      let regularCustomers = 0;
-      let newCustomers = 0;
+    const invoices = await Invoice.find({
+      businessId,
+      isDeleted: false,
+    });
 
-      customers.forEach((cust) => {
-        if (
-          cust.classificationSegment ===
-          "VIP"
-        ) {
-          vipCustomers++;
-        } else if (
-          cust.classificationSegment ===
-          "Regular"
-        ) {
-          regularCustomers++;
-        } else {
-          newCustomers++;
-        }
-      });
+    let vipCustomers = 0;
+    let regularCustomers = 0;
+    let newCustomers = 0;
 
-      const spendingMap = {};
+    customers.forEach((cust) => {
+      if (cust.classificationSegment === "VIP") {
+        vipCustomers++;
+      } else if (cust.classificationSegment === "Regular") {
+        regularCustomers++;
+      } else {
+        newCustomers++;
+      }
+    });
 
-      invoices.forEach((inv) => {
-        const custId =
-          inv.customer.toString();
+    const spendingMap = {};
 
-        if (!spendingMap[custId]) {
-          spendingMap[custId] = 0;
-        }
+    invoices.forEach((inv) => {
+      const custId = inv.customer.toString();
 
-        spendingMap[custId] +=
-          inv.ledger.totalAmount || 0;
-      });
+      if (!spendingMap[custId]) {
+        spendingMap[custId] = 0;
+      }
 
-      const topCustomers =
-        customers
-          .map((cust) => ({
-            customerNo:
-              cust.customerNo,
+      spendingMap[custId] += inv.ledger.totalAmount || 0;
+    });
 
-            fullName:
-              cust.fullName,
+    const topCustomers = customers
+      .map((cust) => ({
+        customerNo: cust.customerNo,
 
-            totalSpent:
-              spendingMap[
-                cust._id.toString()
-              ] || 0,
-          }))
-          .sort(
-            (a, b) =>
-              b.totalSpent -
-              a.totalSpent
-          )
-          .slice(0, 5);
+        fullName: cust.fullName,
 
-      res.status(200).json({
-        success: true,
+        totalSpent: spendingMap[cust._id.toString()] || 0,
+      }))
+      .sort((a, b) => b.totalSpent - a.totalSpent)
+      .slice(0, 5);
 
-        data: {
-          totalCustomers:
-            customers.length,
+    res.status(200).json({
+      success: true,
 
-          vipCustomers,
+      data: {
+        totalCustomers: customers.length,
 
-          regularCustomers,
+        vipCustomers,
 
-          newCustomers,
+        regularCustomers,
 
-          topCustomers,
-        },
-      });
-    } catch (error) {
-      res.status(500).json({
-        success: false,
-        message: error.message,
-      });
-    }
-  };
+        newCustomers,
+
+        topCustomers,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};

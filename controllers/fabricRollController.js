@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 const FabricRoll = require("../models/FabricRoll");
 const FabricUsage = require("../models/FabricUsage");
+const generateSequence = require("../utils/generateSequence");
 
 exports.createFabricRoll = async (req, res) => {
   try {
