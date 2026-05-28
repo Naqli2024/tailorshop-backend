@@ -9,6 +9,18 @@ const itemSchema = new mongoose.Schema({
 
   quantity: Number,
 
+  serviceDetails: {
+    serviceId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Service",
+      default: null,
+    },
+
+    serviceName: String,
+
+    estimatedDays: Number,
+  },
+
   fabricDetails: {
     fabricSource: {
       type: String,
@@ -101,7 +113,7 @@ const jobCardSchema = new mongoose.Schema(
     assignedEmployee: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Employee",
-      required: true,
+      default: null,
     },
 
     bookingDate: {
@@ -122,13 +134,13 @@ const jobCardSchema = new mongoose.Schema(
     status: {
       type: String,
       enum: [
+        "Draft",
         "Pending",
         "Assigned",
         "Cutting",
         "Stitching",
-        "Trial Pending",
-        "In Progress",
-        "Completed",
+        "Trial",
+        "Ready",
         "Delivered",
         "Cancelled",
       ],
@@ -150,6 +162,16 @@ const jobCardSchema = new mongoose.Schema(
     isDeleted: {
       type: Boolean,
       default: false,
+    },
+
+    isDraft: {
+      type: Boolean,
+      default: false,
+    },
+
+    draftCompletedAt: {
+      type: Date,
+      default: null,
     },
   },
   {

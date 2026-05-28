@@ -4,51 +4,44 @@ const Employee = require("../models/Employee");
 const Notification = require("../models/Notification");
 const Invoice = require("../models/Invoice");
 const generateSequence = require("../utils/generateSequence");
+const Service = require("../models/Service");
 
-// CREATE JOB CARD
-exports.createJobCard = async (req, res) => {
+exports.bookService = async (req, res) => {
   try {
-    const {
-      customerNo,
-      empNo,
-      deliveryDate,
-      trialDate,
-      priority,
-      items,
-      billing,
-      notes,
-    } = req.body;
+    const { serviceId, customerNo, deliveryDate, notes } = req.body;
 
     const businessId = req.user.businessId;
 
-    // CHECK CUSTOMER EXISTS
-    const customerExists = await Customer.findOne({
+    // SERVICE
+    const service = await Service.findOne({
+      _id: serviceId,
+      businessId,
+      active: true,
+      isDeleted: false,
+    });
+
+    if (!service) {
+      return res.status(404).json({
+        success: false,
+        message: "Service not found",
+      });
+    }
+
+    // CUSTOMER
+    const customer = await Customer.findOne({
       businessId,
       customerNo,
       isDeleted: false,
     });
 
-    if (!customerExists) {
+    if (!customer) {
       return res.status(404).json({
         success: false,
         message: "Customer not found",
       });
     }
 
-    // CHECK EMPLOYEE EXISTS
-    const employeeExists = await Employee.findOne({
-      businessId,
-      empNo,
-      isDeleted: false,
-    });
-
-    if (!employeeExists) {
-      return res.status(404).json({
-        success: false,
-        message: "Assigned employee not found",
-      });
-    }
-
+    // GENERATE NUMBER
     const currentYear = new Date().getFullYear();
 
     const nextNumber = await generateSequence(
@@ -58,52 +51,194 @@ exports.createJobCard = async (req, res) => {
 
     const jobCardNo = `JC-${currentYear}-${String(nextNumber).padStart(5, "0")}`;
 
-    // CREATE JOB CARD
+    // CREATE DRAFT
     const jobCard = await JobCard.create({
       businessId,
+
       jobCardNo,
 
-      // STORE OBJECT IDS
-      customer: customerExists._id,
-
-      assignedEmployee: employeeExists._id,
+      customer: customer._id,
 
       deliveryDate,
-      trialDate,
-      priority,
-      items,
-      billing,
+
       notes,
+
+      isDraft: true,
+
+      status: "Draft",
+
+      items: [
+        {
+          category: service.category,
+
+          dressType: service.serviceName,
+
+          pieceName: service.serviceName,
+
+          quantity: 1,
+
+          serviceDetails: {
+            serviceId: service._id,
+
+            serviceName: service.serviceName,
+
+            estimatedDays: service.estimatedDays,
+          },
+
+          pricing: {
+            stitchingCost: service.price,
+
+            total: service.price,
+          },
+        },
+      ],
+
+      billing: {
+        subTotal: service.price,
+
+        grandTotal: service.price,
+
+        discount: 0,
+
+        advancePaid: 0,
+
+        balanceAmount: service.price,
+      },
     });
 
-    // CREATE NOTIFICATION
+    // NOTIFICATION
     await Notification.create({
       businessId,
-      customer: customerExists._id,
 
-      customerNo: customerExists.customerNo,
+      customer: customer._id,
 
-      title: "Job Card Created",
+      customerNo: customer.customerNo,
 
-      message: `Your tailoring order ${jobCardNo} has been created successfully. Delivery date is ${deliveryDate}.`,
+      title: "Draft Job Created",
+
+      message: `Your order ${jobCardNo} has been booked successfully.`,
 
       type: "Job Created",
 
       relatedJobCard: jobCard._id,
+
       relatedJobCardNo: jobCardNo,
 
       notificationChannel: "System",
     });
 
-    // POPULATE RESPONSE
-    const populatedJobCard = await JobCard.findById(jobCard._id)
-      .populate("customer")
-      .populate("assignedEmployee");
+    const populated = await JobCard.findById(jobCard._id).populate("customer");
 
     res.status(201).json({
       success: true,
-      message: "Job card created successfully",
-      data: populatedJobCard,
+      message: "Service booked successfully",
+      data: populated,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+exports.completeDraftJobCard = async (req, res) => {
+  try {
+    const { jobCardNo } = req.params;
+
+    const { empNo, trialDate, priority, items, billing, notes } = req.body;
+
+    const businessId = req.user.businessId;
+
+    const jobCard = await JobCard.findOne({
+      businessId,
+      jobCardNo,
+      isDeleted: false,
+    });
+
+    if (!jobCard) {
+      return res.status(404).json({
+        success: false,
+        message: "Job card not found",
+      });
+    }
+
+    if (!jobCard.isDraft) {
+      return res.status(400).json({
+        success: false,
+        message: "Already completed",
+      });
+    }
+
+    // EMPLOYEE
+    const employee = await Employee.findOne({
+      businessId,
+      empNo,
+      isDeleted: false,
+    });
+
+    if (!employee) {
+      return res.status(404).json({
+        success: false,
+        message: "Employee not found",
+      });
+    }
+
+    // UPDATE
+    jobCard.assignedEmployee = employee._id;
+
+    jobCard.trialDate = trialDate;
+
+    jobCard.priority = priority;
+
+    jobCard.items = items;
+
+    jobCard.billing = billing;
+
+    jobCard.notes = notes;
+
+    jobCard.isDraft = false;
+
+    jobCard.status = "Pending";
+
+    jobCard.draftCompletedAt = new Date();
+    await jobCard.save();
+
+    const updated = await JobCard.findById(jobCard._id)
+      .populate("customer")
+      .populate("assignedEmployee");
+
+    res.status(200).json({
+      success: true,
+      message: "Draft completed successfully",
+      data: updated,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+exports.getDraftJobCards = async (req, res) => {
+  try {
+    const businessId = req.user.businessId;
+
+    const drafts = await JobCard.find({
+      businessId,
+      isDraft: true,
+      isDeleted: false,
+    })
+      .populate("customer")
+      .sort({
+        createdAt: -1,
+      });
+
+    res.status(200).json({
+      success: true,
+      total: drafts.length,
+      data: drafts,
     });
   } catch (error) {
     res.status(500).json({
@@ -121,6 +256,7 @@ exports.getAllJobCards = async (req, res) => {
     const jobCards = await JobCard.find({
       businessId,
       isDeleted: false,
+      isDraft: false,
     })
       .populate("customer")
       .populate("assignedEmployee")
@@ -186,6 +322,7 @@ exports.updateJobCard = async (req, res) => {
       businessId,
       jobCardNo,
       isDeleted: false,
+      isDraft: false,
     });
 
     if (!jobCard) {
@@ -301,6 +438,7 @@ exports.deleteJobCard = async (req, res) => {
       businessId,
       jobCardNo,
       isDeleted: false,
+      isDraft: false,
     });
 
     if (!jobCard) {
@@ -400,6 +538,7 @@ exports.getJobCardSummary = async (req, res) => {
       businessId,
       jobCardNo,
       isDeleted: false,
+      isDraft: false,
     })
       .populate("customer")
       .populate("assignedEmployee");

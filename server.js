@@ -19,6 +19,7 @@ const ledgerRoutes = require("./routes/ledgerRoutes");
 const notificationRoutes = require("./routes/notificationRoutes");
 const dashboardRoutes = require("./routes/dashboardRoutes");
 const fabricRollRoutes = require("./routes/fabricRollRoutes");
+const serviceRoutes = require("./routes/serviceRoutes");
 
 const cors = require("cors");
 const path = require("path");
@@ -50,6 +51,7 @@ app.use("/api/ledgers", ledgerRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/fabric-rolls", fabricRollRoutes);
+app.use( "/api/services", serviceRoutes );
 
 const PORT = process.env.PORT;
 app.listen(PORT, () => {
