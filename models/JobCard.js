@@ -27,6 +27,11 @@ const itemSchema = new mongoose.Schema({
       enum: ["Customer", "Shop Stock", "Vendor Order"],
     },
 
+    fabricImage: {
+      type: String,
+      default: "",
+    },
+
     outerFabric: {
       fabricName: String,
       material: String,

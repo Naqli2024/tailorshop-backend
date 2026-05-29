@@ -12,7 +12,9 @@ const {
   deleteJobCard,
   getOrdersByCustomerNo,
   getJobCardSummary,
+  uploadFabricImage
 } = require("../controllers/jobCardController");
+const upload = require("../middleware/upload.middleware");
 
 // BOOK SERVICE -> CREATE DRAFT
 router.post("/book-service", auth, bookService);
@@ -40,5 +42,11 @@ router.put("/:jobCardNo", auth, updateJobCard);
 
 // DELETE JOB CARD
 router.delete("/:jobCardNo", auth, deleteJobCard);
+
+router.post(
+  "/upload-fabric-image",
+  upload.single("fabricImage"),
+  uploadFabricImage
+);
 
 module.exports = router;

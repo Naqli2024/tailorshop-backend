@@ -5,130 +5,109 @@ const Notification = require("../models/Notification");
 const Invoice = require("../models/Invoice");
 const generateSequence = require("../utils/generateSequence");
 const Service = require("../models/Service");
+const { uploadFile } = require("../utils/gcpStorage");
 
 exports.bookService = async (req, res) => {
   try {
-    const { serviceId, customerNo, deliveryDate, notes } = req.body;
-
+    const { customerNo, deliveryDate, notes, items } = req.body;
     const businessId = req.user.businessId;
 
-    // SERVICE
-    const service = await Service.findOne({
-      _id: serviceId,
-      businessId,
-      active: true,
-      isDeleted: false,
-    });
-
-    if (!service) {
-      return res.status(404).json({
-        success: false,
-        message: "Service not found",
-      });
-    }
-
-    // CUSTOMER
+    // VALIDATE CUSTOMER
     const customer = await Customer.findOne({
       businessId,
       customerNo,
       isDeleted: false,
     });
-
     if (!customer) {
-      return res.status(404).json({
-        success: false,
-        message: "Customer not found",
-      });
+      return res
+        .status(404)
+        .json({ success: false, message: "Customer not found" });
+    }
+
+    // VALIDATE ITEMS
+    if (!items || items.length === 0) {
+      return res
+        .status(400)
+        .json({
+          success: false,
+          message: "At least one service item required",
+        });
     }
 
     // GENERATE NUMBER
     const currentYear = new Date().getFullYear();
-
     const nextNumber = await generateSequence(
       businessId,
       `JOBCARD_${currentYear}`,
     );
-
     const jobCardNo = `JC-${currentYear}-${String(nextNumber).padStart(5, "0")}`;
+    let jobItems = [];
+    let subTotal = 0;
 
-    // CREATE DRAFT
+    // PROCESS ITEMS
+    for (const item of items) {
+      const service = await Service.findOne({
+        _id: item.serviceId,
+        businessId,
+        active: true,
+        isDeleted: false,
+      });
+      if (!service) {
+        return res
+          .status(404)
+          .json({ success: false, message: "Service not found" });
+      }
+
+      const quantity = item.quantity || 1;
+      const total = service.price * quantity;
+      subTotal += total;
+      jobItems.push({
+        category: service.category,
+        dressType: service.serviceName,
+        pieceName: service.serviceName,
+        quantity,
+        serviceDetails: {
+          serviceId: service._id,
+          serviceName: service.serviceName,
+          estimatedDays: service.estimatedDays,
+        },
+        pricing: {
+          stitchingCost: service.price,
+          total,
+        },
+      });
+    }
+    // CREATE DRAFT JOB CARD
     const jobCard = await JobCard.create({
       businessId,
-
       jobCardNo,
-
       customer: customer._id,
-
       deliveryDate,
-
       notes,
-
       isDraft: true,
-
       status: "Draft",
-
-      items: [
-        {
-          category: service.category,
-
-          dressType: service.serviceName,
-
-          pieceName: service.serviceName,
-
-          quantity: 1,
-
-          serviceDetails: {
-            serviceId: service._id,
-
-            serviceName: service.serviceName,
-
-            estimatedDays: service.estimatedDays,
-          },
-
-          pricing: {
-            stitchingCost: service.price,
-
-            total: service.price,
-          },
-        },
-      ],
-
+      items: jobItems,
       billing: {
-        subTotal: service.price,
-
-        grandTotal: service.price,
-
+        subTotal,
+        grandTotal: subTotal,
         discount: 0,
-
         advancePaid: 0,
-
-        balanceAmount: service.price,
+        balanceAmount: subTotal,
       },
     });
-
     // NOTIFICATION
     await Notification.create({
       businessId,
-
       customer: customer._id,
-
       customerNo: customer.customerNo,
-
       title: "Draft Job Created",
-
       message: `Your order ${jobCardNo} has been booked successfully.`,
-
       type: "Job Created",
-
       relatedJobCard: jobCard._id,
-
       relatedJobCardNo: jobCardNo,
-
       notificationChannel: "System",
     });
-
     const populated = await JobCard.findById(jobCard._id).populate("customer");
-
     res.status(201).json({
       success: true,
       message: "Service booked successfully",
@@ -624,6 +603,65 @@ exports.getJobCardSummary = async (req, res) => {
 
       items: jobCard.items,
     });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+
+// upload fabric image
+exports.uploadFabricImage = async (req, res) => {
+  try {
+    const { draftJobCardNo } = req.body;
+
+    if (!draftJobCardNo) {
+      return res.status(400).json({
+        success: false,
+        message: "draftJobCardNo is required",
+      });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: "fabricImage is required",
+      });
+    }
+
+    // FIND DRAFT
+    const jobCard = await JobCard.findOne({
+      jobCardNo: draftJobCardNo,
+      isDraft: true,
+      isDeleted: false,
+    });
+
+    if (!jobCard) {
+      return res.status(404).json({
+        success: false,
+        message: "Draft job card not found",
+      });
+    }
+
+    // GET BUSINESS ID FROM DRAFT
+    const businessId = jobCard.businessId;
+
+    // UPLOAD
+    const fileUrl = await uploadFile(
+      req.file,
+      businessId,
+      draftJobCardNo
+    );
+
+    res.status(200).json({
+      success: true,
+      message: "Fabric image uploaded successfully",
+
+      url: fileUrl,
+    });
+
   } catch (error) {
     res.status(500).json({
       success: false,
