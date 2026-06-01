@@ -614,6 +614,28 @@ exports.uploadFabricImage = async (req, res) => {
   try {
     const { draftJobCardNo, itemId } = req.body;
 
+    if (!draftJobCardNo) {
+      return res.status(400).json({
+        success: false,
+        message: "draftJobCardNo is required",
+      });
+    }
+
+    if (!itemId) {
+      return res.status(400).json({
+        success: false,
+        message: "itemId is required",
+      });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: "fabricImage file is required",
+      });
+    }
+
+    // FIND DRAFT JOBCARD
     const jobCard = await JobCard.findOne({
       jobCardNo: draftJobCardNo,
       isDraft: true,
@@ -627,6 +649,7 @@ exports.uploadFabricImage = async (req, res) => {
       });
     }
 
+    // FIND ITEM
     const item = jobCard.items.id(itemId);
 
     if (!item) {
@@ -636,26 +659,32 @@ exports.uploadFabricImage = async (req, res) => {
       });
     }
 
-    const uploaded = await uploadFile(
+    // UPLOAD TO GCS
+    const fabricImageUrl = await uploadFile(
       req.file,
-      jobCard.businessId,
+      jobCard.businessId.toString(),
       draftJobCardNo,
     );
 
-    item.fabricDetails = {
-      ...item.fabricDetails,
-      fabricImage: uploaded.fileUrl,
-    };
+    // INITIALIZE IF MISSING
+    if (!item.fabricDetails) {
+      item.fabricDetails = {};
+    }
+
+    // SAVE URL IN DB
+    item.fabricDetails.fabricImage = fabricImageUrl;
 
     await jobCard.save();
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       message: "Fabric image uploaded successfully",
-      fabricImage: uploaded.fileUrl,
+      fabricImage: fabricImageUrl,
+      itemId: item._id,
+      jobCardNo: jobCard.jobCardNo,
     });
   } catch (error) {
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: error.message,
     });

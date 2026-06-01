@@ -25,26 +25,46 @@ const itemSchema = new mongoose.Schema({
     fabricSource: {
       type: String,
       enum: ["Customer", "Shop Stock", "Vendor Order"],
+      default: null,
     },
 
     fabricImage: {
       type: String,
-      default: "",
+      default: null,
     },
 
     outerFabric: {
-      fabricName: String,
-      material: String,
-      color: String,
-      pattern: String,
+      fabricName: {
+        type: String,
+        default: "",
+      },
+
+      material: {
+        type: String,
+        default: "",
+      },
+
+      color: {
+        type: String,
+        default: "",
+      },
+
+      pattern: {
+        type: String,
+        default: "",
+      },
     },
 
     lining: {
-      required: Boolean,
+      required: {
+        type: Boolean,
+        default: false,
+      },
 
       type: {
         type: String,
         enum: ["No", "Full Cotton", "Half Cotton", "Full Silk", "Half Silk"],
+        default: "No",
       },
     },
   },
