@@ -26,12 +26,10 @@ exports.bookService = async (req, res) => {
 
     // VALIDATE ITEMS
     if (!items || items.length === 0) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "At least one service item required",
-        });
+      return res.status(400).json({
+        success: false,
+        message: "At least one service item required",
+      });
     }
 
     // GENERATE NUMBER
@@ -611,27 +609,11 @@ exports.getJobCardSummary = async (req, res) => {
   }
 };
 
-
 // upload fabric image
 exports.uploadFabricImage = async (req, res) => {
   try {
-    const { draftJobCardNo } = req.body;
+    const { draftJobCardNo, itemId } = req.body;
 
-    if (!draftJobCardNo) {
-      return res.status(400).json({
-        success: false,
-        message: "draftJobCardNo is required",
-      });
-    }
-
-    if (!req.file) {
-      return res.status(400).json({
-        success: false,
-        message: "fabricImage is required",
-      });
-    }
-
-    // FIND DRAFT
     const jobCard = await JobCard.findOne({
       jobCardNo: draftJobCardNo,
       isDraft: true,
@@ -645,23 +627,33 @@ exports.uploadFabricImage = async (req, res) => {
       });
     }
 
-    // GET BUSINESS ID FROM DRAFT
-    const businessId = jobCard.businessId;
+    const item = jobCard.items.id(itemId);
 
-    // UPLOAD
-    const fileUrl = await uploadFile(
+    if (!item) {
+      return res.status(404).json({
+        success: false,
+        message: "Item not found",
+      });
+    }
+
+    const uploaded = await uploadFile(
       req.file,
-      businessId,
-      draftJobCardNo
+      jobCard.businessId,
+      draftJobCardNo,
     );
+
+    item.fabricDetails = {
+      ...item.fabricDetails,
+      fabricImage: uploaded.fileUrl,
+    };
+
+    await jobCard.save();
 
     res.status(200).json({
       success: true,
       message: "Fabric image uploaded successfully",
-
-      url: fileUrl,
+      fabricImage: uploaded.fileUrl,
     });
-
   } catch (error) {
     res.status(500).json({
       success: false,
