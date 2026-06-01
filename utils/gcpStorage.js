@@ -4,7 +4,7 @@ const path = require("path");
 const storage = new Storage({
   projectId: process.env.GCP_PROJECT_ID,
 
-  credentials: require(path.resolve(process.env.GCP_KEY_FILE)),
+  credentials: JSON.parse(process.env.GCP_SERVICE_ACCOUNT),
 });
 
 const bucket = storage.bucket(process.env.GCP_BUCKET_NAME);
