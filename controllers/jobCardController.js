@@ -690,3 +690,125 @@ exports.uploadFabricImage = async (req, res) => {
     });
   }
 };
+
+
+exports.getJobCardSOP = async (req, res) => {
+  try {
+    const { jobCardNo } = req.params;
+    const businessId = req.user.businessId;
+
+    const jobCard = await JobCard.findOne({
+      businessId,
+      jobCardNo,
+      isDeleted: false,
+    })
+      .populate("customer")
+      .populate("assignedEmployee");
+
+    if (!jobCard) {
+      return res.status(404).json({
+        success: false,
+        message: "Job card not found",
+      });
+    }
+
+    const sop = [
+      {
+        stepNo: 1,
+        step: "Service Booked",
+        completed: true,
+        completedAt: jobCard.createdAt,
+      },
+      {
+        stepNo: 2,
+        step: "Fabric Image Uploaded",
+        completed: jobCard.items.every(
+          item => item.fabricDetails?.fabricImage
+        ),
+      },
+      {
+        stepNo: 3,
+        step: "Measurements Added",
+        completed: jobCard.items.every(
+          item => item.measurements
+        ),
+      },
+      {
+        stepNo: 4,
+        step: "Style Details Added",
+        completed: jobCard.items.every(
+          item => item.styleDetails?.fitType
+        ),
+      },
+      {
+        stepNo: 5,
+        step: "Employee Assigned",
+        completed: !!jobCard.assignedEmployee,
+      },
+      {
+        stepNo: 6,
+        step: "Job Card Completed",
+        completed: !jobCard.isDraft,
+        completedAt: jobCard.draftCompletedAt,
+      },
+      {
+        stepNo: 7,
+        step: "Cutting",
+        completed:
+          jobCard.status === "Cutting" ||
+          jobCard.status === "Stitching" ||
+          jobCard.status === "Trial" ||
+          jobCard.status === "Ready" ||
+          jobCard.status === "Delivered",
+      },
+      {
+        stepNo: 8,
+        step: "Stitching",
+        completed:
+          jobCard.status === "Stitching" ||
+          jobCard.status === "Trial" ||
+          jobCard.status === "Ready" ||
+          jobCard.status === "Delivered",
+      },
+      {
+        stepNo: 9,
+        step: "Trial",
+        completed:
+          jobCard.status === "Trial" ||
+          jobCard.status === "Ready" ||
+          jobCard.status === "Delivered",
+      },
+      {
+        stepNo: 10,
+        step: "Ready",
+        completed:
+          jobCard.status === "Ready" ||
+          jobCard.status === "Delivered",
+      },
+      {
+        stepNo: 11,
+        step: "Invoice Generated",
+        completed: false,
+      },
+      {
+        stepNo: 12,
+        step: "Delivered",
+        completed: jobCard.status === "Delivered",
+      },
+    ];
+
+    res.status(200).json({
+      success: true,
+      jobCardNo,
+      customer: jobCard.customer.fullName,
+      currentStatus: jobCard.status,
+      sop,
+    });
+
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};

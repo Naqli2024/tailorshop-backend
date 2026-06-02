@@ -12,7 +12,8 @@ const {
   deleteJobCard,
   getOrdersByCustomerNo,
   getJobCardSummary,
-  uploadFabricImage
+  uploadFabricImage,
+  getJobCardSOP
 } = require("../controllers/jobCardController");
 const upload = require("../middleware/upload.middleware");
 
@@ -47,6 +48,12 @@ router.post(
   "/upload-fabric-image",
   upload.single("fabricImage"),
   uploadFabricImage
+);
+
+router.get(
+  "/sop/:jobCardNo",
+  auth,
+  getJobCardSOP
 );
 
 module.exports = router;

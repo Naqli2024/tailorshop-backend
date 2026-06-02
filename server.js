@@ -35,7 +35,10 @@ mongoose
   .catch((err) => console.log(err));
 
 // CORS Configuration
-app.use(cors());
+app.use(cors({
+  origin: "https://tailorpos.netlify.app/",
+  credentials: true,
+}));
 
 // Serve Static Files
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
