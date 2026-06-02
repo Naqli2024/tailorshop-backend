@@ -23,8 +23,18 @@ const serviceRoutes = require("./routes/serviceRoutes");
 
 const cors = require("cors");
 const path = require("path");
-
 const app = express();
+
+// CORS Configuration
+app.use(
+  cors({
+    origin: [
+      "http://localhost:3000",
+      "https://tailorpos.netlify.app",
+    ],
+    credentials: true,
+  })
+);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -33,12 +43,6 @@ mongoose
   .connect(process.env.MONGO_URI)
   .then(() => console.log("Database connected"))
   .catch((err) => console.log(err));
-
-// CORS Configuration
-app.use(cors({
-  origin: "https://tailorpos.netlify.app/",
-  credentials: true,
-}));
 
 // Serve Static Files
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
