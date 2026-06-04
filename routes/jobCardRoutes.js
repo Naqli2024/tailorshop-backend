@@ -13,6 +13,7 @@ const {
   getOrdersByCustomerNo,
   getJobCardSummary,
   uploadFabricImage,
+  updateFabricImage,
   getJobCardSOP
 } = require("../controllers/jobCardController");
 const upload = require("../middleware/upload.middleware");
