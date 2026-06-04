@@ -33,6 +33,11 @@ const itemSchema = new mongoose.Schema({
       default: null,
     },
 
+    fabricImagePath: {
+      type: String,
+      default: null,
+    },
+
     outerFabric: {
       fabricName: {
         type: String,

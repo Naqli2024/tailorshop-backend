@@ -50,6 +50,12 @@ router.post(
   uploadFabricImage
 );
 
+router.put(
+  "/update-fabric-image",
+  upload.single("fabricImage"),
+  updateFabricImage
+);
+
 router.get(
   "/sop/:jobCardNo",
   auth,

@@ -5,7 +5,7 @@ const Notification = require("../models/Notification");
 const Invoice = require("../models/Invoice");
 const generateSequence = require("../utils/generateSequence");
 const Service = require("../models/Service");
-const { uploadFile } = require("../utils/gcpStorage");
+const { uploadFile, deleteFile } = require("../utils/gcpStorage");
 
 exports.bookService = async (req, res) => {
   try {
@@ -614,6 +614,7 @@ exports.uploadFabricImage = async (req, res) => {
   try {
     const { draftJobCardNo, itemId } = req.body;
 
+    // VALIDATION
     if (!draftJobCardNo) {
       return res.status(400).json({
         success: false,
@@ -635,7 +636,7 @@ exports.uploadFabricImage = async (req, res) => {
       });
     }
 
-    // FIND DRAFT JOBCARD
+    // FIND DRAFT JOB CARD
     const jobCard = await JobCard.findOne({
       jobCardNo: draftJobCardNo,
       isDraft: true,
@@ -659,38 +660,113 @@ exports.uploadFabricImage = async (req, res) => {
       });
     }
 
-    // UPLOAD TO GCS
-    const fabricImageUrl = await uploadFile(
+    // DELETE OLD IMAGE IF EXISTS
+    if (item.fabricDetails && item.fabricDetails.fabricImagePath) {
+      await deleteFile(item.fabricDetails.fabricImagePath);
+    }
+
+    // UPLOAD NEW IMAGE
+    const uploaded = await uploadFile(
       req.file,
-      jobCard.businessId.toString(),
+      jobCard.businessId,
       draftJobCardNo,
     );
 
-    // INITIALIZE IF MISSING
+    // INITIALIZE fabricDetails IF EMPTY
     if (!item.fabricDetails) {
       item.fabricDetails = {};
     }
 
-    // SAVE URL IN DB
-    item.fabricDetails.fabricImage = fabricImageUrl;
+    // SAVE NEW IMAGE
+    item.fabricDetails.fabricImage = uploaded.fileUrl;
+
+    item.fabricDetails.fabricImagePath = uploaded.filePath;
 
     await jobCard.save();
 
-    return res.status(200).json({
+    res.status(200).json({
       success: true,
       message: "Fabric image uploaded successfully",
-      fabricImage: fabricImageUrl,
-      itemId: item._id,
-      jobCardNo: jobCard.jobCardNo,
+
+      data: {
+        jobCardNo: draftJobCardNo,
+        itemId,
+        fabricImage: uploaded.fileUrl,
+      },
     });
   } catch (error) {
-    return res.status(500).json({
+    res.status(500).json({
       success: false,
       message: error.message,
     });
   }
 };
 
+exports.updateFabricImage = async (req, res) => {
+  try {
+    const { draftJobCardNo, itemId } = req.body;
+
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: "fabricImage required",
+      });
+    }
+
+    // FIND JOB CARD
+    const jobCard = await JobCard.findOne({
+      jobCardNo: draftJobCardNo,
+      isDeleted: false,
+    });
+
+    if (!jobCard) {
+      return res.status(404).json({
+        success: false,
+        message: "Job card not found",
+      });
+    }
+
+    // FIND ITEM
+    const item = jobCard.items.id(itemId);
+
+    if (!item) {
+      return res.status(404).json({
+        success: false,
+        message: "Item not found",
+      });
+    }
+
+    // DELETE OLD IMAGE
+    if (item.fabricDetails && item.fabricDetails.fabricImagePath) {
+      await deleteFile(item.fabricDetails.fabricImagePath);
+    }
+
+    // UPLOAD NEW IMAGE
+    const uploaded = await uploadFile(
+      req.file,
+      jobCard.businessId,
+      draftJobCardNo,
+    );
+
+    // SAVE NEW IMAGE
+    item.fabricDetails.fabricImage = uploaded.fileUrl;
+
+    item.fabricDetails.fabricImagePath = uploaded.filePath;
+
+    await jobCard.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Fabric image updated successfully",
+      fabricImage: uploaded.fileUrl,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
 
 exports.getJobCardSOP = async (req, res) => {
   try {
@@ -723,22 +799,18 @@ exports.getJobCardSOP = async (req, res) => {
         stepNo: 2,
         step: "Fabric Image Uploaded",
         completed: jobCard.items.every(
-          item => item.fabricDetails?.fabricImage
+          (item) => item.fabricDetails?.fabricImage,
         ),
       },
       {
         stepNo: 3,
         step: "Measurements Added",
-        completed: jobCard.items.every(
-          item => item.measurements
-        ),
+        completed: jobCard.items.every((item) => item.measurements),
       },
       {
         stepNo: 4,
         step: "Style Details Added",
-        completed: jobCard.items.every(
-          item => item.styleDetails?.fitType
-        ),
+        completed: jobCard.items.every((item) => item.styleDetails?.fitType),
       },
       {
         stepNo: 5,
@@ -781,9 +853,7 @@ exports.getJobCardSOP = async (req, res) => {
       {
         stepNo: 10,
         step: "Ready",
-        completed:
-          jobCard.status === "Ready" ||
-          jobCard.status === "Delivered",
+        completed: jobCard.status === "Ready" || jobCard.status === "Delivered",
       },
       {
         stepNo: 11,
@@ -804,7 +874,6 @@ exports.getJobCardSOP = async (req, res) => {
       currentStatus: jobCard.status,
       sop,
     });
-
   } catch (error) {
     res.status(500).json({
       success: false,
