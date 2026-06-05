@@ -14,7 +14,7 @@ const {
   getJobCardSummary,
   uploadFabricImage,
   updateFabricImage,
-  getJobCardSOP
+  getJobCardSOP,
 } = require("../controllers/jobCardController");
 const upload = require("../middleware/upload.middleware");
 
@@ -36,6 +36,20 @@ router.get("/customer/:customerNo", auth, getOrdersByCustomerNo);
 // JOB CARD SUMMARY
 router.get("/summary/:jobCardNo", auth, getJobCardSummary);
 
+router.get("/sop/:jobCardNo", auth, getJobCardSOP);
+
+router.post(
+  "/upload-fabric-image",
+  upload.single("fabricImage"),
+  uploadFabricImage,
+);
+
+router.put(
+  "/update-fabric-image",
+  upload.single("fabricImage"),
+  updateFabricImage,
+);
+
 // GET SINGLE JOB CARD
 router.get("/:jobCardNo", auth, getJobCardByJobCardNo);
 
@@ -44,23 +58,5 @@ router.put("/:jobCardNo", auth, updateJobCard);
 
 // DELETE JOB CARD
 router.delete("/:jobCardNo", auth, deleteJobCard);
-
-router.post(
-  "/upload-fabric-image",
-  upload.single("fabricImage"),
-  uploadFabricImage
-);
-
-router.put(
-  "/update-fabric-image",
-  upload.single("fabricImage"),
-  updateFabricImage
-);
-
-router.get(
-  "/sop/:jobCardNo",
-  auth,
-  getJobCardSOP
-);
 
 module.exports = router;
