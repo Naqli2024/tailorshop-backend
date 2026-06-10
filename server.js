@@ -20,6 +20,7 @@ const notificationRoutes = require("./routes/notificationRoutes");
 const dashboardRoutes = require("./routes/dashboardRoutes");
 const fabricRollRoutes = require("./routes/fabricRollRoutes");
 const serviceRoutes = require("./routes/serviceRoutes");
+const accessories = require("./routes/accessoryRoutes");
 
 const cors = require("cors");
 const path = require("path");
@@ -59,6 +60,7 @@ app.use("/api/notifications", notificationRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/fabric-rolls", fabricRollRoutes);
 app.use( "/api/services", serviceRoutes );
+app.use("/api/accessories", accessories);
 
 const PORT = process.env.PORT;
 app.listen(PORT, () => {

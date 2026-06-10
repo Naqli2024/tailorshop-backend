@@ -2,6 +2,7 @@ const mongoose = require("mongoose");
 const FabricRoll = require("../models/FabricRoll");
 const FabricUsage = require("../models/FabricUsage");
 const generateSequence = require("../utils/generateSequence");
+const Customer = require("../models/Customer");
 
 exports.createFabricRoll = async (req, res) => {
   try {
@@ -202,8 +203,14 @@ exports.deleteFabricRoll = async (req, res) => {
 // Default Fabric API
 exports.deductFabric = async (req, res) => {
   try {
-    const { rollNo, usedMeters, jobCardNo, reason } = req.body;
+    const {
+      rollNo,
+      usedMeters,
+      customerNo,
+      reason,
+    } = req.body;
 
+    // FIND FABRIC
     const roll = await FabricRoll.findOne({
       businessId: req.user.businessId,
       rollNo,
@@ -217,6 +224,7 @@ exports.deductFabric = async (req, res) => {
       });
     }
 
+    // CHECK STOCK
     if (usedMeters > roll.remainingMeters) {
       return res.status(400).json({
         success: false,
@@ -224,9 +232,26 @@ exports.deductFabric = async (req, res) => {
       });
     }
 
+    // FIND CUSTOMER
+    let customer = null;
+
+    if (customerNo) {
+      customer = await Customer.findOne({
+        businessId: req.user.businessId,
+        customerNo,
+        isDeleted: false,
+      });
+    }
+
+    // CALCULATE COST
+    const totalCost = usedMeters * roll.costPerMeter;
+
+    // REDUCE STOCK
     roll.remainingMeters -= usedMeters;
 
-    const percentage = (roll.remainingMeters / roll.totalMeters) * 100;
+    // UPDATE STATUS
+    const percentage =
+      (roll.remainingMeters / roll.totalMeters) * 100;
 
     if (percentage <= 20) {
       roll.status = "Empty";
@@ -238,6 +263,7 @@ exports.deductFabric = async (req, res) => {
 
     await roll.save();
 
+    // GENERATE TRANSACTION
     const nextNumber = await generateSequence(
       req.user.businessId,
       "FABRIC_USAGE",
@@ -245,17 +271,33 @@ exports.deductFabric = async (req, res) => {
 
     const transactionNo = `FUT-${String(nextNumber).padStart(5, "0")}`;
 
-    await FabricUsage.create({
+    // SAVE HISTORY
+    const usage = await FabricUsage.create({
       businessId: req.user.businessId,
+
       transactionNo,
 
       fabricRoll: roll._id,
 
-      rollNo,
+      rollNo: roll.rollNo,
 
-      jobCardNo,
+      customer: customer?._id || null,
+
+      customerNo: customer?.customerNo || null,
+
+      customerName: customer?.fullName || "",
+
+      fabricName: roll.fabricName,
+
+      fabricType: roll.fabricType,
+
+      color: roll.color,
 
       usedMeters,
+
+      costPerMeter: roll.costPerMeter,
+
+      totalCost,
 
       remainingMeters: roll.remainingMeters,
 
@@ -265,6 +307,8 @@ exports.deductFabric = async (req, res) => {
     res.status(200).json({
       success: true,
       message: "Fabric deducted successfully",
+
+      data: usage,
     });
   } catch (error) {
     res.status(500).json({

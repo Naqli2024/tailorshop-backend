@@ -6,7 +6,7 @@ exports.createCustomer = async (req, res) => {
   try {
     const businessId = req.user.businessId;
 
-    const { fullName, phone, email, address, customerSegment } = req.body;
+    const { fullName, phone, email, address, customerSegment, measurements } = req.body;
 
     const existingCustomer = await Customer.findOne({
       businessId,
@@ -33,6 +33,7 @@ exports.createCustomer = async (req, res) => {
       email,
       address,
       customerSegment,
+      measurements,
     });
 
     res.status(201).json({

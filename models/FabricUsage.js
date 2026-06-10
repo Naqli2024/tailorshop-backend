@@ -11,7 +11,6 @@ const fabricUsageSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "Business",
       required: true,
-      index: true,
     },
 
     fabricRoll: {
@@ -22,41 +21,50 @@ const fabricUsageSchema = new mongoose.Schema(
 
     rollNo: String,
 
-    jobCardNo: String,
+    customer: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Customer",
+      default: null,
+    },
 
-    usedMeters: Number,
+    customerNo: {
+      type: String,
+      default: null,
+    },
+
+    customerName: {
+      type: String,
+      default: "",
+    },
+
+    fabricName: String,
+
+    fabricType: String,
+
+    color: String,
+
+    usedMeters: {
+      type: Number,
+      required: true,
+    },
+
+    costPerMeter: {
+      type: Number,
+      default: 0,
+    },
+
+    totalCost: {
+      type: Number,
+      default: 0,
+    },
 
     remainingMeters: Number,
 
     reason: String,
-
-    createdBy: String,
   },
   {
     timestamps: true,
   },
 );
-
-// Each business can have its own FUT-00001
-fabricUsageSchema.index(
-  {
-    businessId: 1,
-    transactionNo: 1,
-  },
-  {
-    unique: true,
-  },
-);
-
-// Faster searches
-fabricUsageSchema.index({
-  businessId: 1,
-  rollNo: 1,
-});
-
-fabricUsageSchema.index({
-  businessId: 1,
-  jobCardNo: 1,
-});
 
 module.exports = mongoose.model("FabricUsage", fabricUsageSchema);

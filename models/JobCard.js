@@ -68,8 +68,11 @@ const itemSchema = new mongoose.Schema({
 
       type: {
         type: String,
-        enum: ["No", "Full Cotton", "Half Cotton", "Full Silk", "Half Silk"],
-        default: "No",
+      },
+
+      meters: {
+        type: Number,
+        default: 0,
       },
     },
   },
@@ -86,12 +89,14 @@ const itemSchema = new mongoose.Schema({
   buttonDetails: {
     type: {
       type: String,
-      enum: ["Metal", "Plastic", "Fabric"],
     },
 
-    style: String,
-
     color: String,
+
+    quantity: {
+      type: Number,
+      default: 0,
+    },
   },
 
   measurements: {

@@ -44,6 +44,34 @@ const customerSchema = new mongoose.Schema(
       default: "New",
     },
 
+    /*
+    ==========================================
+    MEASUREMENTS
+    ==========================================
+    */
+
+    measurements: {
+      shirt: {
+        shoulder: Number,
+        chest: Number,
+        waist: Number,
+        hip: Number,
+        handLength: Number,
+        shirtLength: Number,
+        neck: Number,
+        cuff: Number,
+      },
+
+      pant: {
+        waist: Number,
+        hip: Number,
+        thigh: Number,
+        knee: Number,
+        bottom: Number,
+        pantLength: Number,
+      },
+    },
+
     isDeleted: {
       type: Boolean,
       default: false,

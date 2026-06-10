@@ -56,9 +56,98 @@ exports.bookService = async (req, res) => {
           .json({ success: false, message: "Service not found" });
       }
 
+      /*
+      =========================================
+      BUTTON ACCESSORY REDUCTION
+      =========================================
+      */
+
+      if (
+        item.buttonDetails &&
+        item.buttonDetails.type &&
+        item.buttonDetails.quantity > 0
+      ) {
+        const buttonAccessory = await Accessory.findOne({
+          businessId,
+          itemName: item.buttonDetails.type,
+          isDeleted: false,
+        });
+
+        if (!buttonAccessory) {
+          return res.status(404).json({
+            success: false,
+            message: `Accessory not found: ${item.buttonDetails.type}`,
+          });
+        }
+
+        if (buttonAccessory.quantity < item.buttonDetails.quantity) {
+          return res.status(400).json({
+            success: false,
+            message: `Insufficient stock for ${item.buttonDetails.type}`,
+          });
+        }
+
+        // REDUCE STOCK
+        buttonAccessory.quantity -= item.buttonDetails.quantity;
+
+        // UPDATE STATUS
+        buttonAccessory.status =
+          buttonAccessory.quantity <= buttonAccessory.reorderAt
+            ? "Low Stock"
+            : "In Stock";
+
+        await buttonAccessory.save();
+      }
+
+      /*
+      =========================================
+      LINING ACCESSORY REDUCTION
+      =========================================
+      */
+
+      if (
+        item.fabricDetails &&
+        item.fabricDetails.lining &&
+        item.fabricDetails.lining.required &&
+        item.fabricDetails.lining.type &&
+        item.fabricDetails.lining.meters > 0
+      ) {
+        const liningAccessory = await Accessory.findOne({
+          businessId,
+          itemName: item.fabricDetails.lining.type,
+          isDeleted: false,
+        });
+
+        if (!liningAccessory) {
+          return res.status(404).json({
+            success: false,
+            message: `Lining accessory not found: ${item.fabricDetails.lining.type}`,
+          });
+        }
+
+        if (liningAccessory.quantity < item.fabricDetails.lining.meters) {
+          return res.status(400).json({
+            success: false,
+            message: `Insufficient stock for ${item.fabricDetails.lining.type}`,
+          });
+        }
+
+        // REDUCE STOCK
+        liningAccessory.quantity -= item.fabricDetails.lining.meters;
+
+        // UPDATE STATUS
+        liningAccessory.status =
+          liningAccessory.quantity <= liningAccessory.reorderAt
+            ? "Low Stock"
+            : "In Stock";
+
+        await liningAccessory.save();
+      }
+
       const quantity = item.quantity || 1;
       const total = service.price * quantity;
       subTotal += total;
+
       jobItems.push({
         category: service.category,
         dressType: service.serviceName,
@@ -69,6 +158,15 @@ exports.bookService = async (req, res) => {
           serviceName: service.serviceName,
           estimatedDays: service.estimatedDays,
         },
+        fabricDetails: item.fabricDetails,
+
+        styleDetails: item.styleDetails,
+
+        buttonDetails: item.buttonDetails,
+
+        measurements: item.measurements,
+
+        specialWorks: item.specialWorks,
         pricing: {
           stitchingCost: service.price,
           total,
